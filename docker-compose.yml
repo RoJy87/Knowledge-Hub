@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: knowledge-hub-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: knowledge_hub
+      POSTGRES_PASSWORD: knowledge_hub_password
+      POSTGRES_DB: knowledge_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knowledge_hub -d knowledge_hub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: knowledge-hub-backend
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://knowledge_hub:knowledge_hub_password@postgres:5432/knowledge_hub
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-min-32-characters-long
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: your-refresh-secret-key-change-in-production-min-32-characters
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: pnpm run start:dev
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: knowledge-hub-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+      VITE_WS_URL: ws://localhost:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: pnpm run dev --host 0.0.0.0
+
+volumes:
+  postgres_data:
