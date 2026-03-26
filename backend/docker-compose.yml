@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: knowledge-hub-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-knowledge_hub}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-knowledge_hub_password}
+      POSTGRES_DB: ${DB_NAME:-knowledge_hub}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-knowledge_hub} -d ${DB_NAME:-knowledge_hub}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: knowledge-hub-backend
+    restart: unless-stopped
+    environment:
+      PORT: ${PORT:-3000}
+      DATABASE_URL: postgresql://${DB_USER:-knowledge_hub}:${DB_PASSWORD:-knowledge_hub_password}@postgres:5432/${DB_NAME:-knowledge_hub}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: pnpm run start:dev
+
+volumes:
+  postgres_data:

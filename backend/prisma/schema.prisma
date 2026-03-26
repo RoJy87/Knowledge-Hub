@@ -1,0 +1,256 @@
+// backend/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USERS ====================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  avatar    String?
+  bio       String?
+  role      Role     @default(USER)
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  articles       Article[]       @relation("Author")
+  comments       Comment[]
+  favorites      Favorite[]
+  activities     Activity[]
+  projectMembers ProjectMember[]
+  createdProjects Project[]      @relation("ProjectCreator")
+
+  @@index([email])
+  @@index([role])
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+// ==================== PROJECTS ====================
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  slug        String   @unique
+  color       String?  @default("#3B82F6")
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  creatorId   String
+  creator     User     @relation("ProjectCreator", fields: [creatorId], references: [id])
+  members     ProjectMember[]
+  articles    Article[]
+
+  @@index([slug])
+  @@index([creatorId])
+}
+
+model ProjectMember {
+  id        String  @id @default(uuid())
+  role      MemberRole @default(MEMBER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+}
+
+enum MemberRole {
+  MEMBER
+  EDITOR
+  ADMIN
+}
+
+// ==================== ARTICLES ====================
+
+model Article {
+  id        String   @id @default(uuid())
+  title     String
+  slug      String   @unique
+  content   String   @db.Text
+  excerpt   String?
+  coverImage String?
+  status    ArticleStatus @default(DRAFT)
+  viewCount Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  publishedAt DateTime?
+
+  // Relations
+  authorId  String
+  author    User     @relation("Author", fields: [authorId], references: [id])
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  comments    Comment[]
+  tags        ArticleTag[]
+  favorites   Favorite[]
+  versions    ArticleVersion[]
+  activities  Activity[]
+
+  @@index([authorId])
+  @@index([projectId])
+  @@index([status])
+  @@index([publishedAt])
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model ArticleVersion {
+  id        String   @id @default(uuid())
+  version   Int
+  content   String   @db.Text
+  changeLog String?
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, version])
+  @@index([articleId])
+}
+
+// ==================== COMMENTS ====================
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String   @db.Text
+  isEdited  Boolean  @default(false)
+  isDeleted Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  authorId  String
+  author    User    @relation(fields: [authorId], references: [id])
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+
+  @@index([articleId])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+// ==================== TAGS ====================
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  color     String?  @default("#6B7280")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  articles  ArticleTag[]
+
+  @@index([slug])
+}
+
+model ArticleTag {
+  id        String  @id @default(uuid())
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, tagId])
+  @@index([tagId])
+}
+
+// ==================== FAVORITES ====================
+
+model Favorite {
+  id        String   @id @default(uuid())
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@index([userId])
+  @@index([articleId])
+}
+
+// ==================== ACTIVITY ====================
+
+model Activity {
+  id        String   @id @default(uuid())
+  type      ActivityType
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  articleId String?
+  article   Article? @relation(fields: [articleId], references: [id])
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+enum ActivityType {
+  ARTICLE_CREATED
+  ARTICLE_UPDATED
+  ARTICLE_PUBLISHED
+  ARTICLE_DELETED
+  COMMENT_CREATED
+  COMMENT_DELETED
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  USER_JOINED
+  USER_LEFT
+  FAVORITE_ADDED
+  FAVORITE_REMOVED
+}
