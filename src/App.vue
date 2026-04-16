@@ -10,5 +10,6 @@ const uiStore = useUiStore();
 
 onMounted(() => {
   uiStore.initTheme();
+  uiStore.initLocale();
 });
 </script>

@@ -51,6 +51,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/articles/:id/edit',
+    name: 'article-edit',
+    component: () => import('@/views/articles/ArticleEditView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/favorites',
     name: 'favorites',
     component: () => import('@/views/favorites/FavoritesView.vue'),

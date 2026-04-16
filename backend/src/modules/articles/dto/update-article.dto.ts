@@ -31,6 +31,14 @@ export class UpdateArticleDto {
   excerpt?: string;
 
   @ApiPropertyOptional({
+    description: 'Project ID (if article belongs to a project)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsOptional()
+  @IsString({ message: 'Project ID must be a string' })
+  projectId?: string;
+
+  @ApiPropertyOptional({
     description: 'Article status',
     enum: ArticleStatus,
   })

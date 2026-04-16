@@ -4,6 +4,7 @@ import { ArticlesService } from './articles.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { ArticleResponseDto } from './dto/article-response.dto';
+import { ArticleVersionResponseDto } from './dto/article-version-response.dto';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserResponseDto } from '../auth/dto/auth-response.dto';
@@ -127,6 +128,21 @@ export class ArticlesController {
     @CurrentUser() user: UserResponseDto,
   ): Promise<ArticleResponseDto> {
     return this.articlesService.getArticleById(id, user.id);
+  }
+
+  @Get(':id/history')
+  @ApiOperation({ summary: 'Get article version history' })
+  @ApiParam({ name: 'id', description: 'Article ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Article history retrieved successfully',
+    type: [ArticleVersionResponseDto],
+  })
+  async getArticleHistory(
+    @Param('id') id: string,
+    @CurrentUser() user: UserResponseDto,
+  ): Promise<ArticleVersionResponseDto[]> {
+    return this.articlesService.getArticleHistory(id, user.id);
   }
 
   @Patch(':id')

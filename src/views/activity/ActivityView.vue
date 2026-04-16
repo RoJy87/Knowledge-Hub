@@ -1,28 +1,61 @@
 <template>
   <MainLayout>
-    <div class="p-8">
-      <div class="max-w-7xl mx-auto">
-        <h1 class="text-3xl font-bold text-gray-900 mb-8">Activity Feed</h1>
-        <div class="card">
-          <div class="space-y-4">
-            <div v-for="i in 3" :key="i" class="flex items-start gap-4 py-3 border-b last:border-0">
-              <div class="w-10 h-10 bg-gray-200 rounded-full flex-shrink-0"></div>
-              <div class="flex-1">
-                <p class="text-gray-900">
-                  <span class="font-medium">User Name</span>
-                  <span class="text-gray-600"> created an article</span>
-                  <span class="font-medium text-primary-600"> Article Title</span>
-                </p>
-                <p class="text-sm text-gray-500">{{ new Date().toLocaleDateString() }}</p>
-              </div>
-            </div>
-          </div>
+    <section class="page-shell space-y-8">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">{{ t('activity.eyebrow') }}</p>
+          <h1 class="page-title">{{ t('activity.title') }}</h1>
+          <p class="page-description">{{ t('activity.description') }}</p>
         </div>
-      </div>
-    </div>
+      </header>
+
+      <section class="surface-card p-6">
+        <div v-if="loading" class="grid gap-4">
+          <article v-for="i in 4" :key="i" class="surface-panel p-5">
+            <div class="h-5 w-2/3 animate-pulse rounded bg-slate-200"></div>
+            <div class="mt-3 h-4 w-full animate-pulse rounded bg-slate-200"></div>
+          </article>
+        </div>
+        <p v-else-if="items.length === 0" class="text-sm leading-6 text-slate-500">
+          {{ t('activity.empty') }}
+        </p>
+        <ActivityFeedList v-else :items="items" />
+      </section>
+    </section>
   </MainLayout>
 </template>
 
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import MainLayout from '@/components/layout/MainLayout.vue';
+import ActivityFeedList from '@/components/common/ActivityFeedList.vue';
+import { activityApi } from '@/api/activity.api';
+import type { Activity } from '@/types/models';
+import { describeActivity } from '@/utils/presentation';
+import { useLocale } from '@/composables/useLocale';
+
+const loading = ref(false);
+const events = ref<Activity[]>([]);
+const { t } = useLocale();
+
+const items = computed(() =>
+  events.value.map((event) => ({
+    key: event.id,
+    ...describeActivity(event),
+  })),
+);
+
+async function loadActivity() {
+  loading.value = true;
+  try {
+    const response = await activityApi.getActivity(1, 12);
+    events.value = response.data;
+  } catch (error) {
+    console.error('Failed to load activity:', error);
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(loadActivity);
 </script>

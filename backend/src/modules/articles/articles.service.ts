@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { ArticleResponseDto, ArticleListResponseDto } from './dto/article-response.dto';
+import { ArticleVersionResponseDto } from './dto/article-version-response.dto';
 import { ArticleStatus } from '@prisma/client';
 
 @Injectable()
@@ -347,6 +348,33 @@ export class ArticlesService {
     return this.mapArticleToResponse(article);
   }
 
+  async getArticleHistory(id: string, userId?: string): Promise<ArticleVersionResponseDto[]> {
+    const article = await this.prisma.article.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        authorId: true,
+      },
+    });
+
+    if (!article) {
+      throw new NotFoundException(`Article with ID ${id} not found`);
+    }
+
+    const versions = await this.prisma.articleVersion.findMany({
+      where: { articleId: id },
+      orderBy: { version: 'desc' },
+    });
+
+    return versions.map((version) => ({
+      id: version.id,
+      version: version.version,
+      content: version.content,
+      changeLog: version.changeLog ?? undefined,
+      createdAt: version.createdAt,
+    }));
+  }
+
   /**
    * Update article
    */
@@ -366,6 +394,29 @@ export class ArticlesService {
     // Check if user is author or admin
     if (article.authorId !== userId) {
       throw new ForbiddenException('You do not have permission to update this article');
+    }
+
+    if (updateArticleDto.projectId) {
+      const project = await this.prisma.project.findUnique({
+        where: { id: updateArticleDto.projectId },
+      });
+
+      if (!project) {
+        throw new NotFoundException(`Project with ID ${updateArticleDto.projectId} not found`);
+      }
+
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          userId_projectId: {
+            userId,
+            projectId: updateArticleDto.projectId,
+          },
+        },
+      });
+
+      if (project.creatorId !== userId && !member) {
+        throw new ForbiddenException('You do not have permission to move this article to the selected project');
+      }
     }
 
     // If status is changing to PUBLISHED, set publishedAt

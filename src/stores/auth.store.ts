@@ -64,6 +64,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function updateLocalProfile(data: Partial<Pick<User, 'firstName' | 'lastName' | 'bio'>>) {
+    if (!user.value) return;
+
+    user.value = {
+      ...user.value,
+      ...data,
+    };
+
+    localStorage.setItem('user', JSON.stringify(user.value));
+  }
+
   return {
     user,
     accessToken,
@@ -74,5 +85,6 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     loadUser,
     initFromStorage,
+    updateLocalProfile,
   };
 });

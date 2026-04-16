@@ -83,6 +83,14 @@ export interface Comment {
   updatedAt: string;
 }
 
+export interface ArticleVersion {
+  id: string;
+  version: number;
+  content: string;
+  changeLog?: string;
+  createdAt: string;
+}
+
 export interface Tag {
   id: string;
   name: string;

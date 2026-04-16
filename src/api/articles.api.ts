@@ -1,5 +1,5 @@
 import { api } from './axios';
-import type { Article, ArticleList, PaginatedResponse } from '@/types/models';
+import type { Article, ArticleList, ArticleVersion, PaginatedResponse } from '@/types/models';
 
 export interface CreateArticleDto {
   title: string;
@@ -14,6 +14,7 @@ export interface UpdateArticleDto {
   title?: string;
   content?: string;
   excerpt?: string;
+  projectId?: string;
   status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   coverImage?: string;
   tagIds?: string[];
@@ -63,6 +64,11 @@ export const articlesApi = {
 
   async updateArticle(id: string, data: UpdateArticleDto): Promise<Article> {
     const response = await api.patch<ApiResponse<Article>>(`/articles/${id}`, data);
+    return response.data.data;
+  },
+
+  async getArticleHistory(id: string): Promise<ArticleVersion[]> {
+    const response = await api.get<ApiResponse<ArticleVersion[]>>(`/articles/${id}/history`);
     return response.data.data;
   },
 
