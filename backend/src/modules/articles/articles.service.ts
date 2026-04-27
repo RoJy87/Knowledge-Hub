@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
@@ -10,9 +10,6 @@ import { ArticleStatus } from '@prisma/client';
 export class ArticlesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Generate unique slug from article title
-   */
   private generateSlug(title: string): string {
     const baseSlug = title
       .toLowerCase()
@@ -22,13 +19,9 @@ export class ArticlesService {
     return `${baseSlug}-${Date.now()}`;
   }
 
-  /**
-   * Create a new article
-   */
   async createArticle(userId: string, createArticleDto: CreateArticleDto): Promise<ArticleResponseDto> {
     const slug = this.generateSlug(createArticleDto.title);
 
-    // If project is specified, verify user has access
     if (createArticleDto.projectId) {
       const project = await this.prisma.project.findUnique({
         where: { id: createArticleDto.projectId },
@@ -106,7 +99,6 @@ export class ArticlesService {
       },
     });
 
-    // Create initial version
     await this.prisma.articleVersion.create({
       data: {
         articleId: article.id,
@@ -119,9 +111,6 @@ export class ArticlesService {
     return this.mapArticleToResponse(article);
   }
 
-  /**
-   * Get all articles with pagination and filters
-   */
   async getArticles(
     filters: {
       projectId?: string;
@@ -141,21 +130,14 @@ export class ArticlesService {
       totalPages: number;
     };
   }> {
-    const {
-      projectId,
-      authorId,
-      status,
-      tagId,
-      search,
-      page = 1,
-      limit = 10,
-    } = filters;
-
+    const { projectId, authorId, status, tagId, search, page = 1, limit = 10 } = filters;
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      status: status || ArticleStatus.PUBLISHED,
-    };
+    const where: any = {};
+
+    if (status) {
+      where.status = status;
+    }
 
     if (projectId) {
       where.projectId = projectId;
@@ -196,6 +178,12 @@ export class ArticlesService {
               avatar: true,
             },
           },
+          project: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           tags: {
             include: {
               tag: {
@@ -214,7 +202,7 @@ export class ArticlesService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.article.count({ where }),
     ]);
@@ -230,9 +218,6 @@ export class ArticlesService {
     };
   }
 
-  /**
-   * Get article by ID with full details
-   */
   async getArticleById(id: string, userId?: string): Promise<ArticleResponseDto> {
     const article = await this.prisma.article.findUnique({
       where: { id },
@@ -276,7 +261,6 @@ export class ArticlesService {
       throw new NotFoundException(`Article with ID ${id} not found`);
     }
 
-    // Increment view count if not author
     if (userId && userId !== article.authorId) {
       await this.prisma.article.update({
         where: { id },
@@ -289,9 +273,6 @@ export class ArticlesService {
     return this.mapArticleToResponse(article);
   }
 
-  /**
-   * Get article by slug
-   */
   async getArticleBySlug(slug: string, userId?: string): Promise<ArticleResponseDto> {
     const article = await this.prisma.article.findUnique({
       where: { slug },
@@ -335,7 +316,6 @@ export class ArticlesService {
       throw new NotFoundException(`Article with slug ${slug} not found`);
     }
 
-    // Increment view count if not author
     if (userId && userId !== article.authorId) {
       await this.prisma.article.update({
         where: { id: article.id },
@@ -375,14 +355,7 @@ export class ArticlesService {
     }));
   }
 
-  /**
-   * Update article
-   */
-  async updateArticle(
-    id: string,
-    userId: string,
-    updateArticleDto: UpdateArticleDto,
-  ): Promise<ArticleResponseDto> {
+  async updateArticle(id: string, userId: string, updateArticleDto: UpdateArticleDto): Promise<ArticleResponseDto> {
     const article = await this.prisma.article.findUnique({
       where: { id },
     });
@@ -391,7 +364,6 @@ export class ArticlesService {
       throw new NotFoundException(`Article with ID ${id} not found`);
     }
 
-    // Check if user is author or admin
     if (article.authorId !== userId) {
       throw new ForbiddenException('You do not have permission to update this article');
     }
@@ -419,12 +391,10 @@ export class ArticlesService {
       }
     }
 
-    // If status is changing to PUBLISHED, set publishedAt
     if (updateArticleDto.status === ArticleStatus.PUBLISHED && article.status !== ArticleStatus.PUBLISHED) {
       updateArticleDto.publishedAt = new Date();
     }
 
-    // Create new version if content changed
     if (updateArticleDto.content && updateArticleDto.content !== article.content) {
       const latestVersion = await this.prisma.articleVersion.findFirst({
         where: { articleId: id },
@@ -441,7 +411,6 @@ export class ArticlesService {
       });
     }
 
-    // Update tags if provided
     const tagsUpdate = updateArticleDto.tagIds
       ? {
           deleteMany: {},
@@ -496,9 +465,6 @@ export class ArticlesService {
     return this.mapArticleToResponse(updatedArticle);
   }
 
-  /**
-   * Delete article
-   */
   async deleteArticle(id: string, userId: string, isAdmin: boolean = false): Promise<void> {
     const article = await this.prisma.article.findUnique({
       where: { id },
@@ -508,7 +474,6 @@ export class ArticlesService {
       throw new NotFoundException(`Article with ID ${id} not found`);
     }
 
-    // Check if user is author or admin
     if (article.authorId !== userId && !isAdmin) {
       throw new ForbiddenException('You do not have permission to delete this article');
     }
@@ -518,14 +483,7 @@ export class ArticlesService {
     });
   }
 
-  /**
-   * Get user's articles
-   */
-  async getUserArticles(
-    userId: string,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<{
+  async getUserArticles(userId: string, page: number = 1, limit: number = 10): Promise<{
     data: ArticleListResponseDto[];
     meta: {
       total: number;
@@ -537,14 +495,7 @@ export class ArticlesService {
     return this.getArticles({ authorId: userId, page, limit });
   }
 
-  /**
-   * Get project articles
-   */
-  async getProjectArticles(
-    projectId: string,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<{
+  async getProjectArticles(projectId: string, page: number = 1, limit: number = 10): Promise<{
     data: ArticleListResponseDto[];
     meta: {
       total: number;
@@ -556,9 +507,6 @@ export class ArticlesService {
     return this.getArticles({ projectId, page, limit });
   }
 
-  /**
-   * Map Prisma article to response DTO
-   */
   private mapArticleToResponse(article: any): ArticleResponseDto {
     return {
       id: article.id,
@@ -591,9 +539,6 @@ export class ArticlesService {
     };
   }
 
-  /**
-   * Map Prisma article to list response DTO
-   */
   private mapArticleToListResponse(article: any): ArticleListResponseDto {
     return {
       id: article.id,
@@ -610,6 +555,8 @@ export class ArticlesService {
         email: article.author.email,
         avatar: article.author.avatar,
       },
+      projectId: article.projectId,
+      projectName: article.project?.name,
       tags: article.tags.map((at: any) => ({
         id: at.tag.id,
         name: at.tag.name,
@@ -618,6 +565,7 @@ export class ArticlesService {
       })),
       commentsCount: article._count.comments,
       createdAt: article.createdAt,
+      updatedAt: article.updatedAt,
       publishedAt: article.publishedAt,
     };
   }

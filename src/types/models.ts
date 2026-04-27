@@ -20,6 +20,7 @@ export interface Project {
   isActive: boolean;
   creatorId: string;
   creator?: User;
+  documentsCount?: number;
   members?: ProjectMember[];
   createdAt: string;
   updatedAt: string;
@@ -47,6 +48,7 @@ export interface Article {
   author?: User;
   projectId?: string;
   project?: Project;
+  projectName?: string;
   tags: Tag[];
   commentsCount: number;
   createdAt: string;
@@ -63,9 +65,12 @@ export interface ArticleList {
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   viewCount: number;
   author: User;
+  projectId?: string;
+  projectName?: string;
   tags: Tag[];
   commentsCount: number;
   createdAt: string;
+  updatedAt: string;
   publishedAt?: string;
 }
 

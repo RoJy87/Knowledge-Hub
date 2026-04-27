@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import MainLayout from '@/components/layout/MainLayout.vue';
 import ArticleEditorForm, { type ArticleEditorState } from '@/components/articles/ArticleEditorForm.vue';
 import { articlesApi } from '@/api/articles.api';
@@ -41,6 +41,7 @@ import { parseValidationErrors } from '@/utils/api-errors';
 import { useLocale } from '@/composables/useLocale';
 import { useUiStore } from '@/stores/ui.store';
 
+const route = useRoute();
 const router = useRouter();
 const uiStore = useUiStore();
 const { t } = useLocale();
@@ -90,6 +91,11 @@ async function loadEditorData() {
     const [projectsResponse, tagsResponse] = await Promise.all([projectsApi.getProjects(), tagsApi.getTags(1, 50)]);
     projects.value = projectsResponse.data;
     tags.value = tagsResponse.data;
+
+    const requestedProjectId = typeof route.query.projectId === 'string' ? route.query.projectId : '';
+    if (requestedProjectId && projects.value.some((project) => project.id === requestedProjectId)) {
+      form.projectId = requestedProjectId;
+    }
   } catch (error) {
     generalError.value = t('editor.loadFailed');
   } finally {

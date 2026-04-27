@@ -38,7 +38,7 @@
                 {{ project.isActive ? t('projects.projectActive') : t('projects.projectArchived') }}
               </span>
               <button type="button" class="btn-secondary">{{ t('projects.manageMembers') }}</button>
-              <router-link to="/articles/create" class="btn-primary">{{ t('common.newDocument') }}</router-link>
+              <router-link :to="createDocumentRoute" class="btn-primary">{{ t('common.newDocument') }}</router-link>
             </div>
           </div>
 
@@ -48,7 +48,7 @@
               <p class="stat-label">{{ t('projects.statMembers') }}</p>
             </article>
             <article class="surface-panel stat-card">
-              <p class="stat-value">{{ estimatedDocs }}</p>
+              <p class="stat-value">{{ project.documentsCount || projectDocuments.length }}</p>
               <p class="stat-label">{{ t('projects.statDocuments') }}</p>
             </article>
             <article class="surface-panel stat-card">
@@ -66,19 +66,25 @@
                   <p class="eyebrow">{{ t('projects.pinnedDocuments') }}</p>
                   <h2 class="section-title mt-2">{{ t('projects.pinnedDocumentsTitle') }}</h2>
                 </div>
-                <router-link to="/articles" class="text-sm font-semibold text-[var(--color-brand-700)]">{{ t('common.viewAll') }}</router-link>
+                <router-link :to="projectDocumentsRoute" class="text-sm font-semibold text-[var(--color-brand-700)]">{{ t('common.viewAll') }}</router-link>
               </div>
 
-              <div class="mt-5 data-list">
-                <article v-for="document in projectDocuments" :key="document.title" class="surface-panel p-5">
+              <div v-if="projectDocuments.length === 0" class="mt-5 empty-state">
+                <p class="text-lg font-semibold text-slate-900">{{ t('documents.emptyTitle') }}</p>
+                <p class="mt-2">{{ t('documents.emptyDescription') }}</p>
+              </div>
+
+              <div v-else class="mt-5 data-list">
+                <router-link v-for="document in projectDocuments" :key="document.id" :to="`/articles/${document.id}`" class="surface-panel block p-5">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 class="text-lg font-semibold text-slate-900">{{ document.title }}</h3>
-                      <p class="mt-1 text-sm text-slate-500">{{ document.meta }}</p>
+                      <p class="mt-1 text-sm text-slate-500">{{ documentMeta(document) }}</p>
                     </div>
-                    <span class="status-chip" :class="statusClass(document.status)">{{ document.status }}</span>
+                    <span class="status-chip" :class="resolveStatusClass(document.status)">{{ document.status.toLowerCase() }}</span>
                   </div>
-                </article>
+                  <p class="mt-3 text-sm leading-6 text-slate-600">{{ document.excerpt || t('documents.noSummary') }}</p>
+                </router-link>
               </div>
             </section>
           </div>
@@ -94,7 +100,7 @@
                 </div>
                 <div>
                   <dt class="text-sm font-medium text-slate-500">{{ t('projects.detailOwnerRole') }}</dt>
-                  <dd class="mt-1 text-base font-medium text-slate-900">{{ t('projects.detailOwnerRoleValue') }}</dd>
+                  <dd class="mt-1 text-base font-medium text-slate-900">{{ leadRole }}</dd>
                 </div>
                 <div>
                   <dt class="text-sm font-medium text-slate-500">{{ t('projects.detailUpdated') }}</dt>
@@ -140,35 +146,22 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import MainLayout from '@/components/layout/MainLayout.vue';
 import { projectsApi } from '@/api/projects.api';
-import type { Project, ProjectMember } from '@/types/models';
+import { articlesApi } from '@/api/articles.api';
+import type { Project, ProjectMember, ArticleList } from '@/types/models';
+import { statusClass as resolveStatusClass } from '@/utils/presentation';
 import { useLocale } from '@/composables/useLocale';
 
 const route = useRoute();
 const { t, locale } = useLocale();
 const project = ref<Project | null>(null);
+const projectDocuments = ref<ArticleList[]>([]);
 const loading = ref(false);
 
 const defaultDescription = computed(() => t('projects.defaultDescription'));
-
-const projectDocuments = computed(() => {
-  const baseTitle = project.value?.name || 'Project';
-
-  return [
-    { title: t('projects.projectDocKickoff', { name: baseTitle }), meta: t('projects.projectDocKickoffMeta'), status: t('documents.published') },
-    { title: t('projects.projectDocRelease'), meta: t('projects.projectDocReleaseMeta'), status: t('documents.draft') },
-    { title: t('projects.projectDocAgreements'), meta: t('projects.projectDocAgreementsMeta'), status: t('documents.published') },
-    { title: t('projects.projectDocArchitecture'), meta: t('projects.projectDocArchitectureMeta'), status: t('documents.archived') },
-  ];
-});
-
-const estimatedDocs = computed(() => Math.max(6, (project.value?.members?.length || 0) * 3 + 4));
-const recentChanges = computed(() => Math.max(3, (project.value?.members?.length || 0) + 2));
-
-function statusClass(status: string) {
-  if (status === t('documents.published')) return 'status-chip--published';
-  if (status === t('documents.archived')) return 'status-chip--archived';
-  return 'status-chip--draft';
-}
+const createDocumentRoute = computed(() => (project.value ? `/articles/create?projectId=${project.value.id}` : '/articles/create'));
+const projectDocumentsRoute = computed(() => (project.value ? `/articles?projectId=${project.value.id}` : '/articles'));
+const recentChanges = computed(() => projectDocuments.value.filter((document) => isRecent(document.updatedAt || document.createdAt)).length);
+const leadRole = computed(() => project.value?.members?.find((member) => member.role === 'ADMIN')?.role ?? t('projects.detailOwnerRoleValue'));
 
 function formatDate(value?: string) {
   if (!value) return t('projects.noRecentUpdates');
@@ -185,10 +178,33 @@ function memberLabel(member: ProjectMember) {
   return `${firstName} ${lastName}`;
 }
 
+function isRecent(value?: string) {
+  if (!value) return false;
+  const diff = Date.now() - new Date(value).getTime();
+  return diff <= 1000 * 60 * 60 * 24 * 7;
+}
+
+function documentMeta(document: ArticleList) {
+  return [formatDate(document.updatedAt || document.createdAt), document.projectName || project.value?.name]
+    .filter(Boolean)
+    .join(' • ');
+}
+
 async function loadProject() {
   loading.value = true;
   try {
-    project.value = await projectsApi.getProject(route.params.id as string);
+    const projectId = route.params.id as string;
+    const [projectResponse, documentsResponse] = await Promise.all([
+      projectsApi.getProject(projectId),
+      articlesApi.getArticles({ projectId, page: 1, limit: 100 }),
+    ]);
+
+    project.value = projectResponse;
+    projectDocuments.value = documentsResponse.data.slice(0, 4);
+
+    if (project.value && project.value.documentsCount === undefined) {
+      project.value.documentsCount = documentsResponse.meta.total;
+    }
   } catch (error) {
     console.error('Failed to load project:', error);
   } finally {

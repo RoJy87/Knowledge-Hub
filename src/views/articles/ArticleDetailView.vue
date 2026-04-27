@@ -97,12 +97,56 @@
               <h2 class="section-title mt-2">
                 {{ selectedVersion ? `v${selectedVersion.version}` : t('documents.historyCurrent') }}
               </h2>
-              <div v-if="selectedVersion" class="mt-5">
-                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                  {{ formatDate(selectedVersion.createdAt) }}
-                </p>
-                <div class="mt-4 rounded-[1.5rem] border border-[var(--app-border)] bg-[var(--color-surface-muted)] p-4">
-                  <pre class="whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ selectedVersion.content }}</pre>
+              <div v-if="selectedVersion" class="mt-5 space-y-5">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    {{ formatDate(selectedVersion.createdAt) }}
+                  </p>
+                  <p class="mt-2 text-sm leading-6 text-slate-600">
+                    {{ selectedVersion.changeLog || t('documents.historyCompareDescription') }}
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                  <span class="tag-chip">{{ t('documents.historyChanged', { count: comparisonSummary.changed }) }}</span>
+                  <span class="tag-chip">{{ t('documents.historyAdded', { count: comparisonSummary.added }) }}</span>
+                  <span class="tag-chip">{{ t('documents.historyRemoved', { count: comparisonSummary.removed }) }}</span>
+                </div>
+
+                <div class="grid gap-3 xl:grid-cols-2">
+                  <section class="rounded-[1.5rem] border border-[var(--app-border)] bg-[var(--color-surface-muted)] p-4">
+                    <div class="mb-3 flex items-center justify-between gap-2">
+                      <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{{ t('documents.historyCurrentLabel') }}</p>
+                    </div>
+                    <div class="grid gap-3">
+                      <div
+                        v-for="block in comparisonBlocks"
+                        :key="`${block.id}-current`"
+                        class="rounded-2xl border p-3"
+                        :class="blockClass(block.type)"
+                      >
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{{ blockIndexLabel(block.id) }}</p>
+                        <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ block.current || '—' }}</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="rounded-[1.5rem] border border-[var(--app-border)] bg-[var(--color-surface-muted)] p-4">
+                    <div class="mb-3 flex items-center justify-between gap-2">
+                      <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{{ t('documents.historySelectedLabel', { version: selectedVersion.version }) }}</p>
+                    </div>
+                    <div class="grid gap-3">
+                      <div
+                        v-for="block in comparisonBlocks"
+                        :key="`${block.id}-selected`"
+                        class="rounded-2xl border p-3"
+                        :class="blockClass(block.type)"
+                      >
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{{ blockIndexLabel(block.id) }}</p>
+                        <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ block.previous || '—' }}</p>
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </div>
               <div v-else class="mt-5 text-sm leading-6 text-slate-500">
@@ -167,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import MainLayout from '@/components/layout/MainLayout.vue';
 import CommentThread from '@/components/articles/CommentThread.vue';
@@ -178,6 +222,15 @@ import type { Article, ArticleVersion, Comment } from '@/types/models';
 import { useLocale } from '@/composables/useLocale';
 import { useAuthStore } from '@/stores/auth.store';
 import { useUiStore } from '@/stores/ui.store';
+
+type ComparisonType = 'same' | 'changed' | 'added' | 'removed';
+
+type ComparisonBlock = {
+  id: number;
+  current: string;
+  previous: string;
+  type: ComparisonType;
+};
 
 const route = useRoute();
 const { t, locale } = useLocale();
@@ -195,6 +248,65 @@ const deletingIds = ref<string[]>([]);
 const history = ref<ArticleVersion[]>([]);
 const comments = ref<Comment[]>([]);
 const selectedVersion = ref<ArticleVersion | null>(null);
+
+const comparisonBlocks = computed<ComparisonBlock[]>(() => {
+  if (!article.value || !selectedVersion.value) return [];
+
+  const currentParts = splitIntoBlocks(article.value.content);
+  const previousParts = splitIntoBlocks(selectedVersion.value.content);
+  const size = Math.max(currentParts.length, previousParts.length);
+
+  return Array.from({ length: size }, (_, index) => {
+    const current = currentParts[index] ?? '';
+    const previous = previousParts[index] ?? '';
+
+    let type: ComparisonType = 'same';
+    if (!previous && current) {
+      type = 'added';
+    } else if (previous && !current) {
+      type = 'removed';
+    } else if (previous !== current) {
+      type = 'changed';
+    }
+
+    return {
+      id: index + 1,
+      current,
+      previous,
+      type,
+    };
+  });
+});
+
+const comparisonSummary = computed(() => {
+  return comparisonBlocks.value.reduce(
+    (acc, block) => {
+      if (block.type === 'changed') acc.changed += 1;
+      if (block.type === 'added') acc.added += 1;
+      if (block.type === 'removed') acc.removed += 1;
+      return acc;
+    },
+    { changed: 0, added: 0, removed: 0 },
+  );
+});
+
+function splitIntoBlocks(content: string) {
+  return content
+    .split(/\n{2,}|\r\n\r\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function blockClass(type: ComparisonType) {
+  if (type === 'changed') return 'border-amber-200 bg-amber-50';
+  if (type === 'added') return 'border-emerald-200 bg-emerald-50';
+  if (type === 'removed') return 'border-rose-200 bg-rose-50';
+  return 'border-[var(--app-border)] bg-white';
+}
+
+function blockIndexLabel(id: number) {
+  return `${t('documents.historyCompare')} ${id}`;
+}
 
 function formatDate(value?: string) {
   if (!value) return t('documents.noRecentUpdates');

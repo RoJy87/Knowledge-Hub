@@ -22,24 +22,26 @@
             <div class="flex items-start justify-between gap-6">
               <div>
                 <p class="eyebrow">{{ t('home.continueWorking') }}</p>
-                <h2 class="section-title mt-3">{{ t('home.continueWorkingTitle') }}</h2>
+                <h2 class="section-title mt-3">{{ continueWorkingTitle }}</h2>
                 <p class="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                  {{ t('home.continueWorkingDescription') }}
+                  {{ continueWorkingDescription }}
                 </p>
               </div>
 
-              <span class="status-chip status-chip--draft shrink-0">Draft</span>
+              <span class="status-chip shrink-0" :class="currentArticle ? statusClass(currentArticle.status) : 'status-chip--draft'">
+                {{ currentArticle ? currentArticle.status.toLowerCase() : 'draft' }}
+              </span>
             </div>
 
             <div class="mt-6 surface-panel p-5">
               <div class="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                <span class="font-medium text-slate-900">{{ t('home.continueWorkingMetaSpace') }}</span>
-                <span>{{ t('home.continueWorkingMetaEdited') }}</span>
-                <span>{{ t('home.continueWorkingMetaAuthors') }}</span>
+                <span class="font-medium text-slate-900">{{ continueWorkingProject }}</span>
+                <span>{{ continueWorkingUpdated }}</span>
+                <span>{{ continueWorkingAuthor }}</span>
               </div>
               <div class="mt-5 flex flex-wrap gap-3">
-                <router-link to="/articles" class="btn-primary">{{ t('common.resume') }}</router-link>
-                <router-link to="/projects" class="btn-secondary">{{ t('common.openProject') }}</router-link>
+                <router-link :to="continueWorkingRoute" class="btn-primary">{{ t('common.resume') }}</router-link>
+                <router-link :to="continueProjectRoute" class="btn-secondary">{{ t('common.openProject') }}</router-link>
               </div>
             </div>
           </section>
@@ -67,7 +69,7 @@
                     {{ t('home.draftsEmptyDescription') }}
                   </p>
                 </article>
-                <article v-for="draft in drafts" v-else :key="draft.id" class="surface-panel p-4">
+                <router-link v-for="draft in drafts" v-else :key="draft.id" :to="`/articles/${draft.id}/edit`" class="surface-panel block p-4">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <h3 class="text-base font-semibold text-slate-900">{{ draft.title }}</h3>
                     <span class="status-chip" :class="statusClass(draft.status)">{{ draft.status.toLowerCase() }}</span>
@@ -75,8 +77,11 @@
                   <p class="mt-2 text-sm leading-6 text-slate-600">
                     {{ draft.excerpt || t('home.draftFallback') }}
                   </p>
-                  <p class="mt-3 text-sm text-slate-500">{{ formatRelativeTime(draft.createdAt) }}</p>
-                </article>
+                  <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                    <span>{{ draft.projectName || t('documents.generalKnowledge') }}</span>
+                    <span>{{ formatRelativeTime(draft.updatedAt || draft.createdAt) }}</span>
+                  </div>
+                </router-link>
               </div>
             </section>
 
@@ -92,19 +97,19 @@
                   <h3 class="text-sm font-semibold text-slate-900">{{ t('home.pinnedProjectsEmptyTitle') }}</h3>
                   <p class="text-xs text-slate-500">{{ t('home.pinnedProjectsEmptyDescription') }}</p>
                 </article>
-                <template v-else>
-                  <article
-                    v-for="project in pinnedProjects"
-                    :key="project.id"
-                    class="surface-panel flex items-center gap-3 p-3"
-                  >
-                    <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: project.color || '#3B82F6' }"></span>
-                    <div>
-                      <h3 class="text-sm font-semibold text-slate-900">{{ project.name }}</h3>
-                      <p class="text-xs text-slate-500">{{ t('home.docsCount', { count: Math.max(4, (project.members?.length || 1) * 3) }) }}</p>
-                    </div>
-                  </article>
-                </template>
+                <router-link
+                  v-for="project in pinnedProjects"
+                  v-else
+                  :key="project.id"
+                  :to="`/projects/${project.id}`"
+                  class="surface-panel flex items-center gap-3 p-3"
+                >
+                  <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: project.color || '#3B82F6' }"></span>
+                  <div>
+                    <h3 class="text-sm font-semibold text-slate-900">{{ project.name }}</h3>
+                    <p class="text-xs text-slate-500">{{ t('home.docsCount', { count: project.documentsCount || 0 }) }}</p>
+                  </div>
+                </router-link>
               </div>
             </section>
           </div>
@@ -154,7 +159,7 @@ import { articlesApi } from '@/api/articles.api';
 import { projectsApi } from '@/api/projects.api';
 import { activityApi } from '@/api/activity.api';
 import ActivityFeedList from '@/components/common/ActivityFeedList.vue';
-import type { ArticleList, Project, Activity } from '@/types/models';
+import type { ArticleList, Project, Activity, PaginatedResponse } from '@/types/models';
 import { describeActivity, formatRelativeTime, statusClass } from '@/utils/presentation';
 import { useLocale } from '@/composables/useLocale';
 
@@ -165,6 +170,7 @@ const firstName = computed(() => authStore.user?.firstName ?? 'Danil');
 
 const loading = ref(false);
 const drafts = ref<ArticleList[]>([]);
+const recentArticles = ref<ArticleList[]>([]);
 const pinnedProjects = ref<Project[]>([]);
 const activity = ref<Activity[]>([]);
 
@@ -174,6 +180,11 @@ const actions = [
   { titleKey: 'home.actionOpenDocuments', descriptionKey: 'home.actionOpenDocumentsDescription', to: '/articles' },
 ];
 
+const emptyArticlesResponse = (): PaginatedResponse<ArticleList> => ({
+  data: [],
+  meta: { total: 0, page: 1, limit: 3, totalPages: 0 },
+});
+
 const activityItems = computed(() =>
   activity.value.map((item) => ({
     key: item.id,
@@ -181,17 +192,35 @@ const activityItems = computed(() =>
   })),
 );
 
+const currentArticle = computed(() => recentArticles.value[0] ?? drafts.value[0] ?? null);
+const continueWorkingTitle = computed(() => currentArticle.value?.title || t('home.continueWorkingTitle'));
+const continueWorkingDescription = computed(() => currentArticle.value?.excerpt || t('home.continueWorkingDescription'));
+const continueWorkingProject = computed(() => currentArticle.value?.projectName || t('documents.generalKnowledge'));
+const continueWorkingUpdated = computed(() => formatRelativeTime(currentArticle.value?.updatedAt || currentArticle.value?.createdAt));
+const continueWorkingAuthor = computed(() => {
+  if (!currentArticle.value) return t('home.continueWorkingMetaAuthors');
+  return `${currentArticle.value.author.firstName} ${currentArticle.value.author.lastName}`.trim();
+});
+const continueWorkingRoute = computed(() => {
+  if (!currentArticle.value) return '/articles';
+  return currentArticle.value.status === 'DRAFT' ? `/articles/${currentArticle.value.id}/edit` : `/articles/${currentArticle.value.id}`;
+});
+const continueProjectRoute = computed(() => (currentArticle.value?.projectId ? `/projects/${currentArticle.value.projectId}` : '/projects'));
+
 async function loadDashboard() {
   loading.value = true;
 
   try {
-    const [articlesResponse, projectsResponse, activityResponse] = await Promise.all([
-      articlesApi.getMyArticles(1, 3),
+    const authorId = authStore.user?.id;
+    const [recentArticlesResponse, draftsResponse, projectsResponse, activityResponse] = await Promise.all([
+      articlesApi.getMyArticles(1, 1),
+      authorId ? articlesApi.getArticles({ authorId, status: 'DRAFT', page: 1, limit: 3 }) : Promise.resolve(emptyArticlesResponse()),
       projectsApi.getProjects(1, 3),
       activityApi.getActivity(1, 3),
     ]);
 
-    drafts.value = articlesResponse.data;
+    recentArticles.value = recentArticlesResponse.data;
+    drafts.value = draftsResponse.data;
     pinnedProjects.value = projectsResponse.data;
     activity.value = activityResponse.data;
   } catch (error) {

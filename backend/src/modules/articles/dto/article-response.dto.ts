@@ -107,6 +107,12 @@ export class ArticleListResponseDto {
   @ApiProperty({ description: 'Author', type: ArticleAuthorDto })
   author: ArticleAuthorDto;
 
+  @ApiPropertyOptional({ description: 'Project ID' })
+  projectId?: string;
+
+  @ApiPropertyOptional({ description: 'Project name' })
+  projectName?: string;
+
   @ApiProperty({ description: 'Article tags', type: [ArticleTagDto] })
   tags: ArticleTagDto[];
 
@@ -115,6 +121,9 @@ export class ArticleListResponseDto {
 
   @ApiProperty({ description: 'Creation date' })
   createdAt: Date;
+
+  @ApiProperty({ description: 'Last update date' })
+  updatedAt: Date;
 
   @ApiPropertyOptional({ description: 'Publication date' })
   publishedAt?: Date;

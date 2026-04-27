@@ -58,7 +58,7 @@
 
             <div class="text-sm">
               <p class="font-semibold text-slate-900">{{ t('projects.members', { count: project.members?.length || 0 }) }}</p>
-              <p class="mt-1 text-slate-500">{{ t('projects.docs', { count: estimateDocs(project) }) }}</p>
+              <p class="mt-1 text-slate-500">{{ t('projects.docs', { count: project.documentsCount || 0 }) }}</p>
             </div>
 
             <div class="text-sm">
@@ -153,10 +153,6 @@ const filteredProjects = computed(() => {
 function formatDate(value?: string) {
   if (!value) return t('projects.noUpdates');
   return new Date(value).toLocaleDateString(locale.value === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function estimateDocs(project: Project) {
-  return Math.max(4, (project.members?.length || 1) * 3 + 2);
 }
 
 async function loadProjects() {

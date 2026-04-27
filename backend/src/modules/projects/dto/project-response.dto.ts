@@ -1,5 +1,22 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MemberRole } from '@prisma/client';
+
+export class ProjectMemberUserDto {
+  @ApiProperty({ description: 'User ID' })
+  id: string;
+
+  @ApiProperty({ description: 'User first name' })
+  firstName: string;
+
+  @ApiProperty({ description: 'User last name' })
+  lastName: string;
+
+  @ApiProperty({ description: 'User email' })
+  email: string;
+
+  @ApiPropertyOptional({ description: 'User avatar URL' })
+  avatar?: string;
+}
 
 export class ProjectMemberDto {
   @ApiProperty({ description: 'Member ID' })
@@ -16,6 +33,9 @@ export class ProjectMemberDto {
 
   @ApiProperty({ description: 'Member since' })
   createdAt: Date;
+
+  @ApiPropertyOptional({ description: 'Member user details', type: ProjectMemberUserDto })
+  user?: ProjectMemberUserDto;
 }
 
 export class ProjectResponseDto {
@@ -39,6 +59,9 @@ export class ProjectResponseDto {
 
   @ApiProperty({ description: 'Creator ID' })
   creatorId: string;
+
+  @ApiProperty({ description: 'Project documents count' })
+  documentsCount: number;
 
   @ApiProperty({ description: 'Project members', type: [ProjectMemberDto] })
   members?: ProjectMemberDto[];

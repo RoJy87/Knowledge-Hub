@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -9,9 +9,6 @@ import { ProjectResponseDto, ProjectMemberDto } from './dto/project-response.dto
 export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Generate unique slug from project name
-   */
   private generateSlug(name: string): string {
     const baseSlug = name
       .toLowerCase()
@@ -21,14 +18,10 @@ export class ProjectsService {
     return `${baseSlug}-${Date.now()}`;
   }
 
-  /**
-   * Create a new project
-   */
   async createProject(userId: string, createProjectDto: CreateProjectDto): Promise<ProjectResponseDto> {
     try {
       const slug = this.generateSlug(createProjectDto.name);
 
-      // Create project with creator as admin member
       const project = await this.prisma.project.create({
         data: {
           name: createProjectDto.name,
@@ -66,6 +59,11 @@ export class ProjectsService {
               avatar: true,
             },
           },
+          _count: {
+            select: {
+              articles: true,
+            },
+          },
         },
       });
 
@@ -76,9 +74,6 @@ export class ProjectsService {
     }
   }
 
-  /**
-   * Get all projects for a user
-   */
   async getUserProjects(userId: string, page: number = 1, limit: number = 10): Promise<{
     data: ProjectResponseDto[];
     meta: {
@@ -90,7 +85,6 @@ export class ProjectsService {
   }> {
     const skip = (page - 1) * limit;
 
-    // Get projects where user is creator or member
     const [projects, total] = await Promise.all([
       this.prisma.project.findMany({
         where: {
@@ -131,8 +125,13 @@ export class ProjectsService {
               avatar: true,
             },
           },
+          _count: {
+            select: {
+              articles: true,
+            },
+          },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.project.count({
         where: {
@@ -162,9 +161,6 @@ export class ProjectsService {
     };
   }
 
-  /**
-   * Get project by ID
-   */
   async getProjectById(id: string, userId: string): Promise<ProjectResponseDto> {
     const project = await this.prisma.project.findUnique({
       where: { id },
@@ -191,6 +187,11 @@ export class ProjectsService {
             avatar: true,
           },
         },
+        _count: {
+          select: {
+            articles: true,
+          },
+        },
       },
     });
 
@@ -198,10 +199,7 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID ${id} not found`);
     }
 
-    // Check if user has access
-    const hasAccess =
-      project.creatorId === userId ||
-      project.members.some((member) => member.userId === userId);
+    const hasAccess = project.creatorId === userId || project.members.some((member) => member.userId === userId);
 
     if (!hasAccess) {
       throw new ForbiddenException('You do not have access to this project');
@@ -210,14 +208,7 @@ export class ProjectsService {
     return this.mapProjectToResponse(project);
   }
 
-  /**
-   * Update project
-   */
-  async updateProject(
-    id: string,
-    userId: string,
-    updateProjectDto: UpdateProjectDto,
-  ): Promise<ProjectResponseDto> {
+  async updateProject(id: string, userId: string, updateProjectDto: UpdateProjectDto): Promise<ProjectResponseDto> {
     const project = await this.prisma.project.findUnique({
       where: { id },
     });
@@ -226,7 +217,6 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID ${id} not found`);
     }
 
-    // Check if user is admin of the project
     const member = await this.prisma.projectMember.findUnique({
       where: {
         userId_projectId: {
@@ -266,15 +256,17 @@ export class ProjectsService {
             avatar: true,
           },
         },
+        _count: {
+          select: {
+            articles: true,
+          },
+        },
       },
     });
 
     return this.mapProjectToResponse(updatedProject);
   }
 
-  /**
-   * Delete project (soft delete)
-   */
   async deleteProject(id: string, userId: string): Promise<void> {
     const project = await this.prisma.project.findUnique({
       where: { id },
@@ -284,7 +276,6 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID ${id} not found`);
     }
 
-    // Check if user is creator or admin
     const member = await this.prisma.projectMember.findUnique({
       where: {
         userId_projectId: {
@@ -298,21 +289,13 @@ export class ProjectsService {
       throw new ForbiddenException('You do not have permission to delete this project');
     }
 
-    // Soft delete by setting isActive to false
     await this.prisma.project.update({
       where: { id },
       data: { isActive: false },
     });
   }
 
-  /**
-   * Add member to project
-   */
-  async addMember(
-    projectId: string,
-    userId: string,
-    addMemberDto: AddMemberDto,
-  ): Promise<ProjectMemberDto> {
+  async addMember(projectId: string, userId: string, addMemberDto: AddMemberDto): Promise<ProjectMemberDto> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -321,7 +304,6 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID ${projectId} not found`);
     }
 
-    // Check if user is admin of the project
     const member = await this.prisma.projectMember.findUnique({
       where: {
         userId_projectId: {
@@ -335,7 +317,6 @@ export class ProjectsService {
       throw new ForbiddenException('You do not have permission to add members to this project');
     }
 
-    // Check if user is already a member
     const existingMember = await this.prisma.projectMember.findUnique({
       where: {
         userId_projectId: {
@@ -368,18 +349,9 @@ export class ProjectsService {
       },
     });
 
-    return {
-      id: projectMember.id,
-      userId: projectMember.userId,
-      projectId: projectMember.projectId,
-      role: projectMember.role,
-      createdAt: projectMember.createdAt,
-    };
+    return this.mapProjectMember(projectMember);
   }
 
-  /**
-   * Remove member from project
-   */
   async removeMember(projectId: string, userId: string, memberId: string): Promise<void> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -389,7 +361,6 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID ${projectId} not found`);
     }
 
-    // Check if user is admin of the project
     const member = await this.prisma.projectMember.findUnique({
       where: {
         userId_projectId: {
@@ -408,9 +379,6 @@ export class ProjectsService {
     });
   }
 
-  /**
-   * Get project members
-   */
   async getMembers(projectId: string, userId: string): Promise<ProjectMemberDto[]> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -435,27 +403,34 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID ${projectId} not found`);
     }
 
-    // Check if user has access
-    const hasAccess =
-      project.creatorId === userId ||
-      project.members.some((member) => member.userId === userId);
+    const hasAccess = project.creatorId === userId || project.members.some((member) => member.userId === userId);
 
     if (!hasAccess) {
       throw new ForbiddenException('You do not have access to this project');
     }
 
-    return project.members.map((member) => ({
+    return project.members.map((member) => this.mapProjectMember(member));
+  }
+
+  private mapProjectMember(member: any): ProjectMemberDto {
+    return {
       id: member.id,
       userId: member.userId,
       projectId: member.projectId,
       role: member.role,
       createdAt: member.createdAt,
-    }));
+      user: member.user
+        ? {
+            id: member.user.id,
+            firstName: member.user.firstName,
+            lastName: member.user.lastName,
+            email: member.user.email,
+            avatar: member.user.avatar,
+          }
+        : undefined,
+    };
   }
 
-  /**
-   * Map Prisma project to response DTO
-   */
   private mapProjectToResponse(project: any): ProjectResponseDto {
     return {
       id: project.id,
@@ -465,13 +440,8 @@ export class ProjectsService {
       color: project.color,
       isActive: project.isActive,
       creatorId: project.creatorId,
-      members: project.members?.map((m: any) => ({
-        id: m.id,
-        userId: m.userId,
-        projectId: m.projectId,
-        role: m.role,
-        createdAt: m.createdAt,
-      })),
+      documentsCount: project._count?.articles ?? 0,
+      members: project.members?.map((member: any) => this.mapProjectMember(member)),
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
