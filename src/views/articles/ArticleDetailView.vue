@@ -35,7 +35,7 @@
               </span>
             </div>
 
-            <div class="mt-6 flex flex-wrap gap-3">
+            <div v-if="canEditCurrentArticle" class="mt-6 flex flex-wrap gap-3">
               <router-link :to="`/articles/${article.id}/edit`" class="btn-secondary">{{ t('documents.editDocument') }}</router-link>
             </div>
 
@@ -126,7 +126,7 @@
                         :class="blockClass(block.type)"
                       >
                         <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{{ blockIndexLabel(block.id) }}</p>
-                        <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ block.current || '—' }}</p>
+                        <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ block.current || '-' }}</p>
                       </div>
                     </div>
                   </section>
@@ -143,7 +143,7 @@
                         :class="blockClass(block.type)"
                       >
                         <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{{ blockIndexLabel(block.id) }}</p>
-                        <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ block.previous || '—' }}</p>
+                        <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ block.previous || '-' }}</p>
                       </div>
                     </div>
                   </section>
@@ -222,6 +222,7 @@ import type { Article, ArticleVersion, Comment } from '@/types/models';
 import { useLocale } from '@/composables/useLocale';
 import { useAuthStore } from '@/stores/auth.store';
 import { useUiStore } from '@/stores/ui.store';
+import { canEditArticle } from '@/utils/permissions';
 
 type ComparisonType = 'same' | 'changed' | 'added' | 'removed';
 
@@ -248,6 +249,8 @@ const deletingIds = ref<string[]>([]);
 const history = ref<ArticleVersion[]>([]);
 const comments = ref<Comment[]>([]);
 const selectedVersion = ref<ArticleVersion | null>(null);
+
+const canEditCurrentArticle = computed(() => canEditArticle(article.value, authStore.user));
 
 const comparisonBlocks = computed<ComparisonBlock[]>(() => {
   if (!article.value || !selectedVersion.value) return [];

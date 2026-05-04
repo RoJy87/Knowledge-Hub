@@ -37,8 +37,8 @@
               <span class="status-chip" :class="project.isActive ? 'status-chip--published' : 'status-chip--archived'">
                 {{ project.isActive ? t('projects.projectActive') : t('projects.projectArchived') }}
               </span>
-              <button type="button" class="btn-secondary">{{ t('projects.manageMembers') }}</button>
-              <router-link :to="createDocumentRoute" class="btn-primary">{{ t('common.newDocument') }}</router-link>
+              <button v-if="canManageMembers" type="button" class="btn-secondary">{{ t('projects.manageMembers') }}</button>
+              <router-link v-if="canCreateProjectDocument" :to="createDocumentRoute" class="btn-primary">{{ t('common.newDocument') }}</router-link>
             </div>
           </div>
 
@@ -150,8 +150,11 @@ import { articlesApi } from '@/api/articles.api';
 import type { Project, ProjectMember, ArticleList } from '@/types/models';
 import { statusClass as resolveStatusClass } from '@/utils/presentation';
 import { useLocale } from '@/composables/useLocale';
+import { useAuthStore } from '@/stores/auth.store';
+import { canContributeToProject, isProjectAdmin } from '@/utils/permissions';
 
 const route = useRoute();
+const authStore = useAuthStore();
 const { t, locale } = useLocale();
 const project = ref<Project | null>(null);
 const projectDocuments = ref<ArticleList[]>([]);
@@ -162,6 +165,8 @@ const createDocumentRoute = computed(() => (project.value ? `/articles/create?pr
 const projectDocumentsRoute = computed(() => (project.value ? `/articles?projectId=${project.value.id}` : '/articles'));
 const recentChanges = computed(() => projectDocuments.value.filter((document) => isRecent(document.updatedAt || document.createdAt)).length);
 const leadRole = computed(() => project.value?.members?.find((member) => member.role === 'ADMIN')?.role ?? t('projects.detailOwnerRoleValue'));
+const canManageMembers = computed(() => isProjectAdmin(project.value, authStore.user));
+const canCreateProjectDocument = computed(() => canContributeToProject(project.value, authStore.user));
 
 function formatDate(value?: string) {
   if (!value) return t('projects.noRecentUpdates');
@@ -187,7 +192,7 @@ function isRecent(value?: string) {
 function documentMeta(document: ArticleList) {
   return [formatDate(document.updatedAt || document.createdAt), document.projectName || project.value?.name]
     .filter(Boolean)
-    .join(' • ');
+    .join(' / ');
 }
 
 async function loadProject() {
