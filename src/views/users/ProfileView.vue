@@ -171,6 +171,7 @@ import { useLocale } from '@/composables/useLocale';
 import { projectsApi } from '@/api/projects.api';
 import type { Locale } from '@/locales/messages';
 import type { Project } from '@/types/models';
+import { getProfileAccessCopy } from '@/utils/product-copy';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -203,16 +204,7 @@ const roleLabel = computed(() => {
   return authStore.user.role === 'ADMIN' ? t('shell.workspaceAdmin') : t('shell.teamMember');
 });
 
-const accessCopy = computed(() => {
-  return {
-    eyebrow: 'Project access',
-    title: 'Your spaces and roles',
-    description: 'A quick overview of the projects you can access and the role you have inside each one.',
-    loading: 'Loading project access...',
-    empty: 'You do not have any accessible projects yet.',
-    fallback: 'Team workspace and project context.',
-  };
-});
+const accessCopy = computed(() => getProfileAccessCopy(locale.value));
 
 async function saveProfile() {
   saving.value = true;

@@ -239,6 +239,7 @@ import { useLocale } from '@/composables/useLocale';
 import { useAuthStore } from '@/stores/auth.store';
 import { useUiStore } from '@/stores/ui.store';
 import { canContributeToProject, isProjectAdmin } from '@/utils/permissions';
+import { getProjectMemberCopy } from '@/utils/product-copy';
 
 const route = useRoute();
 const authStore = useAuthStore();
@@ -265,31 +266,7 @@ const leadRole = computed(() => project.value?.members?.find((member) => member.
 const canManageMembers = computed(() => isProjectAdmin(project.value, authStore.user));
 const canCreateProjectDocument = computed(() => canContributeToProject(project.value, authStore.user));
 const projectMembers = computed(() => project.value?.members ?? []);
-const memberCopy = computed(() => {
-  return {
-    title: 'Project member management',
-    description: 'Add teammates by user ID, change roles, and remove access when it is no longer needed.',
-    empty: 'There are no members in this project yet.',
-    add: 'Add member',
-    adding: 'Adding...',
-    remove: 'Remove',
-    removing: 'Removing...',
-    owner: 'OWNER',
-    userId: 'User ID',
-    userIdPlaceholder: 'For example: 123e4567-e89b-12d3-a456-426614174000',
-    role: 'Role',
-    hint: 'This is a lightweight admin flow without a user picker for now. We can add a user directory and invitations later.',
-    changeRole: 'Save role',
-    savingRole: 'Saving...',
-    addSuccess: 'Member added to project',
-    addFailed: 'Failed to add member',
-    updateSuccess: 'Member role updated',
-    updateFailed: 'Failed to update member role',
-    removeSuccess: 'Member removed from project',
-    removeFailed: 'Failed to remove member',
-    userIdRequired: 'Enter a member user ID',
-  };
-});
+const memberCopy = computed(() => getProjectMemberCopy(locale.value));
 
 function formatDate(value?: string) {
   if (!value) return t('projects.noRecentUpdates');

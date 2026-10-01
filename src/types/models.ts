@@ -7,6 +7,7 @@ export interface User {
   bio?: string;
   role: 'USER' | 'ADMIN' | 'MODERATOR';
   isActive: boolean;
+  projectsCount?: number;
   createdAt: string;
   updatedAt: string;
 }

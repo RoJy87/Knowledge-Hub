@@ -3,14 +3,17 @@
     <section class="page-shell space-y-8">
       <header class="page-header">
         <div>
-          <p class="eyebrow">Search</p>
-          <h1 class="page-title">Search workspace knowledge</h1>
+          <p class="eyebrow">{{ searchCopy.eyebrow }}</p>
+          <h1 class="page-title">{{ searchCopy.title }}</h1>
           <p class="page-description">
-            Find documents by query, narrow results by project and status, and jump back into the right context without losing your filters.
+            {{ searchCopy.description }}
           </p>
         </div>
 
-        <router-link :to="createRoute" class="btn-primary">{{ t('common.newDocument') }}</router-link>
+        <div class="flex flex-wrap gap-3">
+          <button type="button" class="btn-secondary" :disabled="!hasActiveFilters" @click="clearFilters">{{ searchCopy.clearFilters }}</button>
+          <router-link :to="createRoute" class="btn-primary">{{ t('common.newDocument') }}</router-link>
+        </div>
       </header>
 
       <section class="surface-card p-5">
@@ -34,6 +37,56 @@
           </select>
           <button type="button" class="btn-secondary" @click="loadResults">{{ t('documents.refresh') }}</button>
         </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <section class="rounded-[1.25rem] border border-[var(--app-border)] bg-white/70 p-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-900">{{ searchCopy.recentSearchesTitle }}</p>
+                <p class="mt-1 text-xs text-slate-500">{{ searchCopy.recentSearchesDescription }}</p>
+              </div>
+              <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-900" :disabled="recentSearches.length === 0" @click="uiStore.clearRecentSearches()">
+                {{ searchCopy.clear }}
+              </button>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button
+                v-for="query in recentSearches"
+                :key="query"
+                type="button"
+                class="rounded-full border border-[var(--app-border)] bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                @click="applyRecentSearch(query)"
+              >
+                {{ query }}
+              </button>
+              <p v-if="recentSearches.length === 0" class="text-sm text-slate-500">
+                {{ searchCopy.recentSearchesEmpty }}
+              </p>
+            </div>
+          </section>
+
+          <section class="rounded-[1.25rem] border border-[var(--app-border)] bg-white/70 p-4">
+            <div>
+              <p class="text-sm font-semibold text-slate-900">{{ searchCopy.projectShortcutsTitle }}</p>
+              <p class="mt-1 text-xs text-slate-500">{{ searchCopy.projectShortcutsDescription }}</p>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button
+                v-for="project in featuredProjects"
+                :key="project.id"
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300"
+                @click="applyProjectShortcut(project.id)"
+              >
+                <span class="inline-flex h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: project.color || '#3B82F6' }"></span>
+                <span>{{ project.name }}</span>
+              </button>
+              <p v-if="featuredProjects.length === 0" class="text-sm text-slate-500">
+                {{ searchCopy.projectShortcutsEmpty }}
+              </p>
+            </div>
+          </section>
+        </div>
       </section>
 
       <section class="surface-card p-6">
@@ -43,7 +96,7 @@
             <p class="mt-1 text-sm text-slate-500">{{ summaryDescription }}</p>
           </div>
           <router-link to="/articles" class="text-sm font-semibold text-[var(--color-brand-700)]">
-            Browse all documents
+            {{ searchCopy.browseDocuments }}
           </router-link>
         </div>
 
@@ -57,8 +110,8 @@
         </div>
 
         <div v-else-if="articles.length === 0" class="empty-state">
-          <p class="text-lg font-semibold text-slate-900">No search results yet</p>
-          <p class="mt-2">Adjust the query or filters to explore a different slice of workspace knowledge.</p>
+          <p class="text-lg font-semibold text-slate-900">{{ searchCopy.emptyTitle }}</p>
+          <p class="mt-2">{{ searchCopy.emptyDescription }}</p>
           <router-link :to="createRoute" class="mt-5 inline-flex btn-primary">{{ t('documents.createDocument') }}</router-link>
         </div>
 
@@ -94,15 +147,20 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { storeToRefs } from 'pinia';
 import MainLayout from '@/components/layout/MainLayout.vue';
 import { articlesApi } from '@/api/articles.api';
 import { projectsApi } from '@/api/projects.api';
 import type { ArticleFilters } from '@/api/articles.api';
 import type { ArticleList, Project } from '@/types/models';
 import { useLocale } from '@/composables/useLocale';
+import { useUiStore } from '@/stores/ui.store';
+import { getSearchCopy } from '@/utils/product-copy';
 
 const route = useRoute();
 const router = useRouter();
+const uiStore = useUiStore();
+const { recentSearches } = storeToRefs(uiStore);
 const { t, locale } = useLocale();
 
 const articles = ref<ArticleList[]>([]);
@@ -115,14 +173,17 @@ const filters = reactive({
   projectId: '',
 });
 
+const searchCopy = computed(() => getSearchCopy(locale.value));
 const createRoute = computed(() => (filters.projectId ? `/articles/create?projectId=${filters.projectId}` : '/articles/create'));
+const hasActiveFilters = computed(() => Boolean(filters.q || filters.status || filters.projectId));
+const featuredProjects = computed(() => projects.value.slice(0, 6));
 const summaryTitle = computed(() => {
   if (!filters.q.trim()) return `All searchable knowledge (${totalResults.value})`;
   return `Results for "${filters.q}" (${totalResults.value})`;
 });
 const summaryDescription = computed(() => {
-  if (!filters.q.trim()) return 'Use the search field to narrow down documents by meaning, author context, and workspace structure.';
-  return 'Filters stay in the URL so you can share this result set or come back to it later.';
+  if (!filters.q.trim()) return searchCopy.value.allKnowledgeDescription;
+  return searchCopy.value.filteredDescription;
 });
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -152,12 +213,34 @@ function buildQuery() {
 }
 
 function applyFilters() {
+  const q = filters.q.trim();
+  if (q) {
+    uiStore.addRecentSearch(q);
+  }
+
   router.replace({ name: 'search', query: buildQuery() });
 }
 
 function debouncedApplyFilters() {
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(applyFilters, 260);
+}
+
+function clearFilters() {
+  filters.q = '';
+  filters.status = '';
+  filters.projectId = '';
+  router.replace({ name: 'search', query: {} });
+}
+
+function applyRecentSearch(query: string) {
+  filters.q = query;
+  applyFilters();
+}
+
+function applyProjectShortcut(projectId: string) {
+  filters.projectId = projectId;
+  applyFilters();
 }
 
 async function loadProjects() {
