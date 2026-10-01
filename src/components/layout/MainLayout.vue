@@ -52,6 +52,17 @@
         </form>
 
         <div class="flex items-center gap-3">
+          <span
+            class="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-500"
+            :title="socketConnected ? t('shell.live') : t('shell.offline')"
+          >
+            <span
+              class="inline-block h-2 w-2 rounded-full"
+              :class="socketConnected ? 'bg-emerald-500' : 'bg-slate-300'"
+            ></span>
+            <span class="hidden sm:inline">{{ liveBadgeLabel }}</span>
+          </span>
+
           <div class="hidden items-center gap-1 rounded-2xl border border-[var(--app-border)] bg-white/80 p-1 sm:inline-flex">
             <button
               v-for="option in localeOptions"
@@ -111,13 +122,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, ref, watch } from 'vue';
+import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useUiStore } from '@/stores/ui.store';
 import { useAuthStore } from '@/stores/auth.store';
 import { useLocale } from '@/composables/useLocale';
+import { useActivitySocket } from '@/composables/useActivitySocket';
 import type { Locale } from '@/locales/messages';
+import type { Activity } from '@/types/models';
 
 function createIcon(path: string) {
   return defineComponent({
@@ -210,4 +223,18 @@ function submitSearch() {
 function handleLocaleChange(nextLocale: Locale) {
   setLocale(nextLocale);
 }
+
+function formatActivityLabel(activity: Activity): string {
+  const who = `${activity.user?.firstName ?? ''} ${activity.user?.lastName ?? ''}`.trim();
+  const what = t(`activity.types.${activity.type}`);
+  const where = activity.articleTitle || activity.metadata?.name || '';
+  return where ? `${who} ${what} «${where}»` : `${who} ${what}`;
+}
+
+const { connected: socketConnected } = useActivitySocket((activity) => {
+  if (activity.user?.id === authStore.user?.id) return;
+  uiStore.addToast(formatActivityLabel(activity), 'info');
+});
+
+const liveBadgeLabel = computed(() => (socketConnected.value ? t('shell.live') : t('shell.offline')));
 </script>

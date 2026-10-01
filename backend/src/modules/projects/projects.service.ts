@@ -1,14 +1,21 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ActivityService } from '../activity/activity.service';
+import { ActivityGateway } from '../activity/activity.gateway';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { ProjectResponseDto, ProjectMemberDto } from './dto/project-response.dto';
+import { ActivityType } from '@prisma/client';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+    private readonly activityGateway: ActivityGateway,
+  ) {}
 
   private generateSlug(name: string): string {
     const baseSlug = name
@@ -66,6 +73,10 @@ export class ProjectsService {
             },
           },
         },
+      });
+
+      this.logBestEffort(userId, project.id, ActivityType.PROJECT_CREATED, {
+        name: project.name,
       });
 
       return this.mapProjectToResponse(project);
@@ -265,6 +276,8 @@ export class ProjectsService {
       },
     });
 
+    this.logBestEffort(userId, id, ActivityType.PROJECT_UPDATED, { name: updatedProject.name });
+
     return this.mapProjectToResponse(updatedProject);
   }
 
@@ -348,6 +361,12 @@ export class ProjectsService {
           },
         },
       },
+    });
+
+    this.logBestEffort(userId, projectId, ActivityType.USER_JOINED, {
+      addedUserId: addMemberDto.userId,
+      role: addMemberDto.role,
+      name: project.name,
     });
 
     return this.mapProjectMember(projectMember);
@@ -527,5 +546,28 @@ export class ProjectsService {
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
+  }
+
+  /**
+   * Log a project activity and broadcast it. Best-effort: never fails the operation.
+   */
+  private logBestEffort(
+    userId: string,
+    projectId: string,
+    type: ActivityType,
+    metadata?: Record<string, any>,
+  ): void {
+    this.activityService
+      .logActivity({ userId, type, metadata })
+      .then((activity) => {
+        this.activityGateway.broadcast('activity:new', activity);
+        this.activityGateway.broadcastToProject(projectId, 'project:changed', {
+          projectId,
+          type,
+        });
+      })
+      .catch(() => {
+        // Activity best-effort: ignore failures
+      });
   }
 }

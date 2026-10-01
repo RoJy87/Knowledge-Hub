@@ -1,11 +1,18 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ActivityService } from '../activity/activity.service';
+import { ActivityGateway } from '../activity/activity.gateway';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CommentResponseDto } from './dto/comment-response.dto';
+import { ActivityType } from '@prisma/client';
 
 @Injectable()
 export class CommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+    private readonly activityGateway: ActivityGateway,
+  ) {}
 
   /**
    * Create a new comment
@@ -68,6 +75,11 @@ export class CommentsService {
           },
         },
       },
+    });
+
+    this.broadcastBestEffort(articleId, userId, ActivityType.COMMENT_CREATED, {
+      commentId: comment.id,
+      title: article.title,
     });
 
     return this.mapCommentToResponse(comment);
@@ -260,6 +272,10 @@ export class CommentsService {
         isDeleted: true,
       },
     });
+
+    this.broadcastBestEffort(comment.articleId, userId, ActivityType.COMMENT_DELETED, {
+      commentId: id,
+    });
   }
 
   /**
@@ -300,5 +316,31 @@ export class CommentsService {
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
     };
+  }
+
+  /**
+   * Log a comment activity and broadcast it. Best-effort: never fails the operation.
+   */
+  private broadcastBestEffort(
+    articleId: string,
+    userId: string,
+    type: ActivityType,
+    metadata?: Record<string, any>,
+  ): void {
+    // Resolve article owner of comment is enough for the room-scoped broadcast;
+    // log first, broadcast second, swallow all errors.
+    this.activityService
+      .logActivity({ userId, type, articleId, metadata })
+      .then((activity) => {
+        this.activityGateway.broadcast('activity:new', activity);
+        this.activityGateway.broadcastToArticle(articleId, 'comment:changed', {
+          articleId,
+          type,
+          metadata,
+        });
+      })
+      .catch(() => {
+        // Activity best-effort: ignore failures
+      });
   }
 }

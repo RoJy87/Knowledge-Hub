@@ -1,10 +1,17 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ActivityService } from '../activity/activity.service';
+import { ActivityGateway } from '../activity/activity.gateway';
 import { FavoriteResponseDto } from './dto/favorite-response.dto';
+import { ActivityType } from '@prisma/client';
 
 @Injectable()
 export class FavoritesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+    private readonly activityGateway: ActivityGateway,
+  ) {}
 
   /**
    * Add article to favorites
@@ -163,11 +170,32 @@ export class FavoritesService {
 
     if (existingFavorite) {
       await this.removeFromFavorites(userId, articleId);
+      this.logBestEffort(userId, ActivityType.FAVORITE_REMOVED, articleId);
       return { isFavorite: false };
     }
 
     const favorite = await this.addToFavorites(userId, articleId);
+    this.logBestEffort(userId, ActivityType.FAVORITE_ADDED, articleId);
     return { isFavorite: true, favorite };
+  }
+
+  /**
+   * Log a favorite activity and broadcast it. Best-effort: never fails the operation.
+   */
+  private logBestEffort(
+    userId: string,
+    type: ActivityType,
+    articleId: string,
+    metadata?: Record<string, any>,
+  ): void {
+    this.activityService
+      .logActivity({ userId, type, articleId, metadata })
+      .then((activity) => {
+        this.activityGateway.broadcast('activity:new', activity);
+      })
+      .catch(() => {
+        // Activity best-effort: ignore failures
+      });
   }
 
   /**

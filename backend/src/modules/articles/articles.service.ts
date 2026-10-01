@@ -1,14 +1,20 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ActivityService } from '../activity/activity.service';
+import { ActivityGateway } from '../activity/activity.gateway';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { ArticleResponseDto, ArticleListResponseDto } from './dto/article-response.dto';
 import { ArticleVersionResponseDto } from './dto/article-version-response.dto';
-import { ArticleStatus } from '@prisma/client';
+import { ArticleStatus, ActivityType } from '@prisma/client';
 
 @Injectable()
 export class ArticlesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+    private readonly activityGateway: ActivityGateway,
+  ) {}
 
   private generateSlug(title: string): string {
     const baseSlug = title
@@ -106,6 +112,11 @@ export class ArticlesService {
         content: createArticleDto.content,
         changeLog: 'Initial version',
       },
+    });
+
+    await this.logAndBroadcast(article.id, userId, ActivityType.ARTICLE_CREATED, {
+      title: article.title,
+      status: article.status,
     });
 
     return this.mapArticleToResponse(article);
@@ -462,6 +473,15 @@ export class ArticlesService {
       },
     });
 
+    const becamePublished =
+      article.status !== ArticleStatus.PUBLISHED && updatedArticle.status === ArticleStatus.PUBLISHED;
+    await this.logAndBroadcast(
+      id,
+      userId,
+      becamePublished ? ActivityType.ARTICLE_PUBLISHED : ActivityType.ARTICLE_UPDATED,
+      { title: updatedArticle.title, status: updatedArticle.status },
+    );
+
     return this.mapArticleToResponse(updatedArticle);
   }
 
@@ -481,6 +501,8 @@ export class ArticlesService {
     await this.prisma.article.delete({
       where: { id },
     });
+
+    await this.logAndBroadcast(id, userId, ActivityType.ARTICLE_DELETED, { title: article.title });
   }
 
   async getUserArticles(userId: string, page: number = 1, limit: number = 10): Promise<{
@@ -568,5 +590,36 @@ export class ArticlesService {
       updatedAt: article.updatedAt,
       publishedAt: article.publishedAt,
     };
+  }
+
+  /**
+   * Log an activity and broadcast it over WebSocket.
+   * Never fails the main operation: logging/broadcast issues are non-critical.
+   */
+  private async logAndBroadcast(
+    articleId: string,
+    userId: string,
+    type: ActivityType,
+    metadata?: Record<string, any>,
+  ): Promise<void> {
+    try {
+      const activity = await this.activityService.logActivity({
+        userId,
+        type,
+        articleId,
+        metadata,
+      });
+
+      this.activityGateway.broadcast('activity:new', activity);
+
+      if (activity.article?.projectId) {
+        this.activityGateway.broadcastToProject(activity.article.projectId, 'article:changed', {
+          articleId,
+          type,
+        });
+      }
+    } catch (error) {
+      // Activity best-effort: ignore failures
+    }
   }
 }
