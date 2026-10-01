@@ -67,6 +67,13 @@ export class TagsService {
         skip,
         take: limit,
         orderBy: { name: 'asc' },
+        include: {
+          _count: {
+            select: {
+              articles: true,
+            },
+          },
+        },
       }),
       this.prisma.tag.count(),
     ]);
@@ -189,6 +196,7 @@ export class TagsService {
       name: tag.name,
       slug: tag.slug,
       color: tag.color,
+      ...(tag._count ? { articlesCount: tag._count.articles } : {}),
       createdAt: tag.createdAt,
       updatedAt: tag.updatedAt,
     };

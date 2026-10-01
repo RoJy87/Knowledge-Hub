@@ -149,6 +149,7 @@ function createIcon(path: string) {
 const DashboardIcon = createIcon('M4 5.5h7v5H4zM13 5.5h7v13h-7zM4 12.5h7V19H4z');
 const ProjectsIcon = createIcon('M3.5 7.5h6l1.8 2H20.5v8.5a1 1 0 01-1 1h-15a1 1 0 01-1-1z');
 const DocumentsIcon = createIcon('M7 4.5h7l4 4V19a1 1 0 01-1 1H7a1 1 0 01-1-1v-13a1 1 0 011-1zM13 4.5V9h4');
+const TagsIcon = createIcon('M4 4.5h6.8L20 13.7a1.2 1.2 0 010 1.7l-4.6 4.6a1.2 1.2 0 01-1.7 0L4.5 10.8 V4.5zM7.5 7.5h.01');
 const ActivityIcon = createIcon('M4 13h3l2-7 4 12 2-5h5');
 const FavoritesIcon = createIcon('M12 20l-6.5-6.2a4.3 4.3 0 116.1-6l.4.4.4-.4a4.3 4.3 0 116.1 6z');
 const SettingsIcon = createIcon('M10.3 4.5l.6-1.5h2.2l.6 1.5 1.7.7 1.5-.6 1.6 1.6-.6 1.5.7 1.7 1.5.6v2.2l-1.5.6-.7 1.7.6 1.5-1.6 1.6-1.5-.6-1.7.7-.6 1.5h-2.2l-.6-1.5-1.7-.7-1.5.6-1.6-1.6.6-1.5-.7-1.7-1.5-.6V10.7l1.5-.6.7-1.7-.6-1.5 1.6-1.6 1.5.6zM12 15.2A3.2 3.2 0 1012 8.8a3.2 3.2 0 000 6.4z');
@@ -157,6 +158,7 @@ const navigation = [
   { labelKey: 'common.dashboard', to: '/', icon: DashboardIcon },
   { labelKey: 'common.projects', to: '/projects', icon: ProjectsIcon },
   { labelKey: 'common.documents', to: '/articles', icon: DocumentsIcon },
+  { labelKey: 'common.tags', to: '/tags', icon: TagsIcon },
   { labelKey: 'common.activity', to: '/activity', icon: ActivityIcon },
   { labelKey: 'common.favorites', to: '/favorites', icon: FavoritesIcon },
   { labelKey: 'common.settings', to: '/profile', icon: SettingsIcon },

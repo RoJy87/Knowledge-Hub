@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class TagResponseDto {
   @ApiProperty({ description: 'Tag ID' })
@@ -12,6 +12,9 @@ export class TagResponseDto {
 
   @ApiProperty({ description: 'Tag color' })
   color: string;
+
+  @ApiPropertyOptional({ description: 'Number of articles with this tag' })
+  articlesCount?: number;
 
   @ApiProperty({ description: 'Creation date' })
   createdAt: Date;

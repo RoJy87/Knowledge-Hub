@@ -100,6 +100,7 @@ const filters = reactive({
   search: '',
   status: '',
   projectId: '',
+  tagId: '',
 });
 
 const createRoute = computed(() => (filters.projectId ? `/articles/create?projectId=${filters.projectId}` : '/articles/create'));
@@ -120,6 +121,7 @@ function syncFiltersFromRoute() {
   filters.search = typeof route.query.search === 'string' ? route.query.search : '';
   filters.status = typeof route.query.status === 'string' ? route.query.status : '';
   filters.projectId = typeof route.query.projectId === 'string' ? route.query.projectId : '';
+  filters.tagId = typeof route.query.tagId === 'string' ? route.query.tagId : '';
 }
 
 function buildQuery() {
@@ -127,6 +129,7 @@ function buildQuery() {
     ...(filters.search ? { search: filters.search } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.projectId ? { projectId: filters.projectId } : {}),
+    ...(filters.tagId ? { tagId: filters.tagId } : {}),
   };
 }
 
@@ -155,6 +158,7 @@ async function loadArticles() {
       ...(filters.search ? { search: filters.search } : {}),
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.projectId ? { projectId: filters.projectId } : {}),
+      ...(filters.tagId ? { tagId: filters.tagId } : {}),
     };
 
     const response = await articlesApi.getArticles(requestFilters);

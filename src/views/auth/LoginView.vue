@@ -1,56 +1,62 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+  <div class="auth-page min-h-screen flex items-center justify-center px-4 py-12">
     <div class="max-w-md w-full">
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-primary-600 mb-2">Knowledge Hub</h1>
-        <p class="text-gray-600">Sign in to your account</p>
+        <h1 class="text-3xl font-bold text-slate-900">DocSpace</h1>
+        <p class="mt-2 text-slate-600">{{ t('auth.signInSubtitle') }}</p>
       </div>
 
-      <div class="card">
-        <form @submit.prevent="handleSubmit" class="space-y-6">
+      <div class="surface-card p-8">
+        <form @submit="onSubmit" class="space-y-5">
           <div>
-            <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
-              Email
+            <label for="email" class="mb-1 block text-sm font-medium text-slate-700">
+              {{ t('auth.email') }}
             </label>
             <input
               id="email"
-              v-model="form.email"
+              v-model="email"
+              v-bind="emailProps"
               type="email"
               class="input-field"
-              placeholder="you@example.com"
-              required
+              :class="{ 'border-rose-400': errors.email }"
+              :placeholder="'you@example.com'"
+              autocomplete="email"
             />
+            <p v-if="errors.email" class="mt-1 text-sm text-rose-600">{{ errors.email }}</p>
           </div>
 
           <div>
-            <label for="password" class="block text-sm font-medium text-gray-700 mb-1">
-              Password
+            <label for="password" class="mb-1 block text-sm font-medium text-slate-700">
+              {{ t('auth.password') }}
             </label>
             <input
               id="password"
-              v-model="form.password"
+              v-model="password"
+              v-bind="passwordProps"
               type="password"
               class="input-field"
+              :class="{ 'border-rose-400': errors.password }"
               placeholder="••••••••"
-              required
+              autocomplete="current-password"
             />
+            <p v-if="errors.password" class="mt-1 text-sm text-rose-600">{{ errors.password }}</p>
           </div>
 
-          <div v-if="error" class="text-red-500 text-sm text-center">
+          <div v-if="error" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {{ error }}
           </div>
 
-          <button type="submit" class="btn-primary w-full" :disabled="loading">
-            <span v-if="loading">Signing in...</span>
-            <span v-else>Sign In</span>
+          <button type="submit" class="btn-primary w-full" :disabled="isSubmitting">
+            <span v-if="isSubmitting">{{ t('auth.signingIn') }}</span>
+            <span v-else>{{ t('auth.signIn') }}</span>
           </button>
         </form>
 
         <div class="mt-6 text-center">
-          <p class="text-sm text-gray-600">
-            Don't have an account?
-            <router-link to="/register" class="text-primary-600 hover:underline">
-              Sign up
+          <p class="text-sm text-slate-600">
+            {{ t('auth.noAccount') }}
+            <router-link to="/register" class="font-semibold text-[var(--color-brand-700)] hover:underline">
+              {{ t('auth.signUp') }}
             </router-link>
           </p>
         </div>
@@ -60,36 +66,47 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useForm } from 'vee-validate';
+import * as yup from 'yup';
 import { useAuthStore } from '@/stores/auth.store';
 import { useUiStore } from '@/stores/ui.store';
+import { useLocale } from '@/composables/useLocale';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const uiStore = useUiStore();
+const { t } = useLocale();
 
-const form = reactive({
-  email: '',
-  password: '',
+const schema = yup.object({
+  email: yup.string().required(t('auth.validationEmailRequired')).email(t('auth.validationEmailInvalid')),
+  password: yup.string().required(t('auth.validationPasswordRequired')),
 });
 
-const loading = ref(false);
+const { defineField, handleSubmit, errors, isSubmitting } = useForm({
+  validationSchema: schema,
+  initialValues: {
+    email: '',
+    password: '',
+  },
+});
+
+const [email, emailProps] = defineField('email');
+const [password, passwordProps] = defineField('password');
+
 const error = ref('');
 
-async function handleSubmit() {
-  loading.value = true;
+const onSubmit = handleSubmit(async (values) => {
   error.value = '';
 
   try {
-    await authStore.login(form.email, form.password);
-    uiStore.addToast('Welcome back!', 'success');
+    await authStore.login(values.email, values.password);
+    uiStore.addToast(t('auth.welcomeBack'), 'success');
     router.push('/');
   } catch (e: any) {
-    error.value = e.response?.data?.message || 'Failed to sign in';
+    error.value = e.response?.data?.message || t('auth.signInFailed');
     uiStore.addToast(error.value, 'error');
-  } finally {
-    loading.value = false;
   }
-}
+});
 </script>

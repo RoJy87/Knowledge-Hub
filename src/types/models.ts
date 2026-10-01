@@ -102,6 +102,7 @@ export interface Tag {
   name: string;
   slug: string;
   color: string;
+  articlesCount?: number;
   createdAt: string;
   updatedAt: string;
 }
