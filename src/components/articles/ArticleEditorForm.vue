@@ -25,14 +25,8 @@
 
         <label class="grid gap-2">
           <span class="text-sm font-semibold text-slate-700">{{ t('editor.content') }}</span>
-          <textarea
-            v-model="localForm.content"
-            class="textarea-field min-h-[24rem]"
-            rows="14"
-            :placeholder="t('editor.contentPlaceholder')"
-          ></textarea>
+          <RichTextEditor v-model="localForm.content" :placeholder="t('editor.contentPlaceholder')" />
           <span v-if="fieldErrors.content" class="text-sm text-rose-600">{{ fieldErrors.content }}</span>
-          <span class="text-sm text-slate-500">{{ t('editor.contentHelp') }}</span>
         </label>
       </div>
 
@@ -99,6 +93,7 @@
 import { reactive, watch } from 'vue';
 import type { Project, Tag } from '@/types/models';
 import { useLocale } from '@/composables/useLocale';
+import RichTextEditor from '@/components/articles/RichTextEditor.vue';
 
 export interface ArticleEditorState {
   title: string;

@@ -39,9 +39,7 @@
               <router-link :to="`/articles/${article.id}/edit`" class="btn-secondary">{{ t('documents.editDocument') }}</router-link>
             </div>
 
-            <div class="mt-10 prose-doc">
-              {{ article.content }}
-            </div>
+            <div class="mt-10 prose-doc" v-html="sanitizedContent"></div>
           </article>
 
           <aside class="space-y-6">
@@ -223,6 +221,7 @@ import { useLocale } from '@/composables/useLocale';
 import { useAuthStore } from '@/stores/auth.store';
 import { useUiStore } from '@/stores/ui.store';
 import { canEditArticle } from '@/utils/permissions';
+import { sanitizeRichText, richTextToPlainText } from '@/utils/rich-text';
 
 type ComparisonType = 'same' | 'changed' | 'added' | 'removed';
 
@@ -251,12 +250,13 @@ const comments = ref<Comment[]>([]);
 const selectedVersion = ref<ArticleVersion | null>(null);
 
 const canEditCurrentArticle = computed(() => canEditArticle(article.value, authStore.user));
+const sanitizedContent = computed(() => sanitizeRichText(article.value?.content ?? ''));
 
 const comparisonBlocks = computed<ComparisonBlock[]>(() => {
   if (!article.value || !selectedVersion.value) return [];
 
-  const currentParts = splitIntoBlocks(article.value.content);
-  const previousParts = splitIntoBlocks(selectedVersion.value.content);
+  const currentParts = splitIntoBlocks(richTextToPlainText(article.value.content));
+  const previousParts = splitIntoBlocks(richTextToPlainText(selectedVersion.value.content));
   const size = Math.max(currentParts.length, previousParts.length);
 
   return Array.from({ length: size }, (_, index) => {
@@ -323,7 +323,8 @@ function statusClass(status: string) {
 }
 
 function entrySummary(content: string) {
-  return content.length > 96 ? `${content.slice(0, 96)}...` : content;
+  const plain = richTextToPlainText(content);
+  return plain.length > 96 ? `${plain.slice(0, 96)}...` : plain;
 }
 
 async function loadArticle() {
