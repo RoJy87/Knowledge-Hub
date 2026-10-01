@@ -36,7 +36,6 @@ backend/.pnpm-store/
 .env.production
 
 # Prisma
-backend/prisma/migrations/
 
 # Testing
 coverage/
