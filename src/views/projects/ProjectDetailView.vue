@@ -37,14 +37,14 @@
               <span class="status-chip" :class="project.isActive ? 'status-chip--published' : 'status-chip--archived'">
                 {{ project.isActive ? t('projects.projectActive') : t('projects.projectArchived') }}
               </span>
-              <button v-if="canManageMembers" type="button" class="btn-secondary">{{ t('projects.manageMembers') }}</button>
+              <button v-if="canManageMembers" type="button" class="btn-secondary" @click="showMembersModal = true">{{ t('projects.manageMembers') }}</button>
               <router-link v-if="canCreateProjectDocument" :to="createDocumentRoute" class="btn-primary">{{ t('common.newDocument') }}</router-link>
             </div>
           </div>
 
           <div class="mt-8 grid gap-4 md:grid-cols-3">
             <article class="surface-panel stat-card">
-              <p class="stat-value">{{ project.members?.length || 0 }}</p>
+              <p class="stat-value">{{ projectMembers.length }}</p>
               <p class="stat-label">{{ t('projects.statMembers') }}</p>
             </article>
             <article class="surface-panel stat-card">
@@ -114,7 +114,7 @@
               <h2 class="section-title mt-2">{{ t('projects.membersSectionTitle') }}</h2>
 
               <div class="mt-5 grid gap-3">
-                <article v-for="member in project.members" :key="member.id" class="surface-panel flex items-center justify-between gap-4 p-4">
+                <article v-for="member in projectMembers" :key="member.id" class="surface-panel flex items-center justify-between gap-4 p-4">
                   <div class="flex items-center gap-3">
                     <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-700">
                       {{ getInitials(member) }}
@@ -138,11 +138,97 @@
         <router-link to="/projects" class="mt-5 inline-flex btn-secondary">{{ t('projects.backToProjects') }}</router-link>
       </section>
     </section>
+
+    <div
+      v-if="showMembersModal && project"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 px-4 backdrop-blur-sm"
+      @click="closeMembersModal"
+    >
+      <div class="surface-card w-full max-w-4xl p-8" @click.stop>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="eyebrow">{{ t('projects.membersSection') }}</p>
+            <h2 class="mt-3 text-2xl font-semibold text-slate-900">{{ memberCopy.title }}</h2>
+            <p class="mt-2 text-sm leading-6 text-slate-600">{{ memberCopy.description }}</p>
+          </div>
+          <button type="button" class="btn-secondary" @click="closeMembersModal">{{ t('common.cancel') }}</button>
+        </div>
+
+        <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
+          <section class="space-y-3">
+            <article v-if="projectMembers.length === 0" class="surface-panel p-4 text-sm text-slate-500">
+              {{ memberCopy.empty }}
+            </article>
+            <article v-for="member in projectMembers" :key="member.id" class="surface-panel grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-900">{{ memberLabel(member) }}</p>
+                <p class="mt-1 truncate text-xs text-slate-500">{{ member.user?.email || member.userId }}</p>
+              </div>
+
+              <div v-if="member.userId === project.creatorId" class="flex items-center gap-3 justify-self-start lg:justify-self-end">
+                <span class="status-chip status-chip--published">ADMIN</span>
+                <span class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">{{ memberCopy.owner }}</span>
+              </div>
+
+              <div v-else class="flex flex-wrap items-center gap-2 justify-self-start lg:justify-self-end">
+                <select
+                  class="select-field min-w-[7rem]"
+                  :value="memberRoleDrafts[member.id] ?? member.role"
+                  @change="updateMemberRoleDraft(member.id, $event)"
+                >
+                  <option value="MEMBER">MEMBER</option>
+                  <option value="EDITOR">EDITOR</option>
+                  <option value="ADMIN">ADMIN</option>
+                </select>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  :disabled="roleSavingId === member.id || !hasRoleChanged(member)"
+                  @click="handleUpdateMemberRole(member)"
+                >
+                  {{ roleSavingId === member.id ? memberCopy.savingRole : memberCopy.changeRole }}
+                </button>
+                <button
+                  type="button"
+                  class="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                  :disabled="removingMemberId === member.id"
+                  @click="handleRemoveMember(member.id)"
+                >
+                  {{ removingMemberId === member.id ? memberCopy.removing : memberCopy.remove }}
+                </button>
+              </div>
+            </article>
+          </section>
+
+          <section class="surface-panel p-5">
+            <p class="eyebrow">{{ memberCopy.add }}</p>
+            <div class="mt-4 grid gap-4">
+              <label class="grid gap-2">
+                <span class="text-sm font-semibold text-slate-700">{{ memberCopy.userId }}</span>
+                <input v-model="memberForm.userId" type="text" class="input-field" :placeholder="memberCopy.userIdPlaceholder" />
+              </label>
+              <label class="grid gap-2">
+                <span class="text-sm font-semibold text-slate-700">{{ memberCopy.role }}</span>
+                <select v-model="memberForm.role" class="select-field">
+                  <option value="MEMBER">MEMBER</option>
+                  <option value="EDITOR">EDITOR</option>
+                  <option value="ADMIN">ADMIN</option>
+                </select>
+              </label>
+              <p class="text-xs leading-5 text-slate-500">{{ memberCopy.hint }}</p>
+              <button type="button" class="btn-primary justify-center" :disabled="memberSaving" @click="handleAddMember">
+                {{ memberSaving ? memberCopy.adding : memberCopy.add }}
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   </MainLayout>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import MainLayout from '@/components/layout/MainLayout.vue';
 import { projectsApi } from '@/api/projects.api';
@@ -151,14 +237,25 @@ import type { Project, ProjectMember, ArticleList } from '@/types/models';
 import { statusClass as resolveStatusClass } from '@/utils/presentation';
 import { useLocale } from '@/composables/useLocale';
 import { useAuthStore } from '@/stores/auth.store';
+import { useUiStore } from '@/stores/ui.store';
 import { canContributeToProject, isProjectAdmin } from '@/utils/permissions';
 
 const route = useRoute();
 const authStore = useAuthStore();
+const uiStore = useUiStore();
 const { t, locale } = useLocale();
 const project = ref<Project | null>(null);
 const projectDocuments = ref<ArticleList[]>([]);
 const loading = ref(false);
+const showMembersModal = ref(false);
+const memberSaving = ref(false);
+const roleSavingId = ref('');
+const removingMemberId = ref('');
+const memberRoleDrafts = reactive<Record<string, ProjectMember['role']>>({});
+const memberForm = reactive({
+  userId: '',
+  role: 'MEMBER' as ProjectMember['role'],
+});
 
 const defaultDescription = computed(() => t('projects.defaultDescription'));
 const createDocumentRoute = computed(() => (project.value ? `/articles/create?projectId=${project.value.id}` : '/articles/create'));
@@ -167,6 +264,32 @@ const recentChanges = computed(() => projectDocuments.value.filter((document) =>
 const leadRole = computed(() => project.value?.members?.find((member) => member.role === 'ADMIN')?.role ?? t('projects.detailOwnerRoleValue'));
 const canManageMembers = computed(() => isProjectAdmin(project.value, authStore.user));
 const canCreateProjectDocument = computed(() => canContributeToProject(project.value, authStore.user));
+const projectMembers = computed(() => project.value?.members ?? []);
+const memberCopy = computed(() => {
+  return {
+    title: 'Project member management',
+    description: 'Add teammates by user ID, change roles, and remove access when it is no longer needed.',
+    empty: 'There are no members in this project yet.',
+    add: 'Add member',
+    adding: 'Adding...',
+    remove: 'Remove',
+    removing: 'Removing...',
+    owner: 'OWNER',
+    userId: 'User ID',
+    userIdPlaceholder: 'For example: 123e4567-e89b-12d3-a456-426614174000',
+    role: 'Role',
+    hint: 'This is a lightweight admin flow without a user picker for now. We can add a user directory and invitations later.',
+    changeRole: 'Save role',
+    savingRole: 'Saving...',
+    addSuccess: 'Member added to project',
+    addFailed: 'Failed to add member',
+    updateSuccess: 'Member role updated',
+    updateFailed: 'Failed to update member role',
+    removeSuccess: 'Member removed from project',
+    removeFailed: 'Failed to remove member',
+    userIdRequired: 'Enter a member user ID',
+  };
+});
 
 function formatDate(value?: string) {
   if (!value) return t('projects.noRecentUpdates');
@@ -195,6 +318,102 @@ function documentMeta(document: ArticleList) {
     .join(' / ');
 }
 
+function syncMemberRoleDrafts(members: ProjectMember[]) {
+  Object.keys(memberRoleDrafts).forEach((key) => {
+    delete memberRoleDrafts[key];
+  });
+
+  members.forEach((member) => {
+    memberRoleDrafts[member.id] = member.role;
+  });
+}
+
+function updateMemberRoleDraft(memberId: string, event: Event) {
+  const value = (event.target as HTMLSelectElement | null)?.value as ProjectMember['role'] | undefined;
+  if (!value) return;
+  memberRoleDrafts[memberId] = value;
+}
+
+function hasRoleChanged(member: ProjectMember) {
+  return (memberRoleDrafts[member.id] ?? member.role) !== member.role;
+}
+
+function closeMembersModal() {
+  showMembersModal.value = false;
+  memberForm.userId = '';
+  memberForm.role = 'MEMBER';
+  memberSaving.value = false;
+  roleSavingId.value = '';
+  removingMemberId.value = '';
+  syncMemberRoleDrafts(projectMembers.value);
+}
+
+async function reloadProjectMembers() {
+  if (!project.value) return;
+  const members = await projectsApi.getMembers(project.value.id);
+  project.value = {
+    ...project.value,
+    members,
+  };
+  syncMemberRoleDrafts(members);
+}
+
+async function handleAddMember() {
+  if (!project.value) return;
+  if (memberForm.userId.trim().length === 0) {
+    uiStore.addToast(memberCopy.value.userIdRequired, 'error');
+    return;
+  }
+
+  memberSaving.value = true;
+  try {
+    await projectsApi.addMember(project.value.id, {
+      userId: memberForm.userId.trim(),
+      role: memberForm.role,
+    });
+    await reloadProjectMembers();
+    memberForm.userId = '';
+    memberForm.role = 'MEMBER';
+    uiStore.addToast(memberCopy.value.addSuccess, 'success');
+  } catch {
+    uiStore.addToast(memberCopy.value.addFailed, 'error');
+  } finally {
+    memberSaving.value = false;
+  }
+}
+
+async function handleUpdateMemberRole(member: ProjectMember) {
+  if (!project.value) return;
+  const nextRole = memberRoleDrafts[member.id] ?? member.role;
+  if (nextRole === member.role) return;
+
+  roleSavingId.value = member.id;
+  try {
+    await projectsApi.updateMemberRole(project.value.id, member.id, { role: nextRole });
+    await reloadProjectMembers();
+    uiStore.addToast(memberCopy.value.updateSuccess, 'success');
+  } catch {
+    memberRoleDrafts[member.id] = member.role;
+    uiStore.addToast(memberCopy.value.updateFailed, 'error');
+  } finally {
+    roleSavingId.value = '';
+  }
+}
+
+async function handleRemoveMember(memberId: string) {
+  if (!project.value) return;
+  removingMemberId.value = memberId;
+  try {
+    await projectsApi.removeMember(project.value.id, memberId);
+    await reloadProjectMembers();
+    uiStore.addToast(memberCopy.value.removeSuccess, 'success');
+  } catch {
+    uiStore.addToast(memberCopy.value.removeFailed, 'error');
+  } finally {
+    removingMemberId.value = '';
+  }
+}
+
 async function loadProject() {
   loading.value = true;
   try {
@@ -206,6 +425,7 @@ async function loadProject() {
 
     project.value = projectResponse;
     projectDocuments.value = documentsResponse.data.slice(0, 4);
+    syncMemberRoleDrafts(projectResponse.members ?? []);
 
     if (project.value && project.value.documentsCount === undefined) {
       project.value.documentsCount = documentsResponse.meta.total;

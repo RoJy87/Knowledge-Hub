@@ -44,12 +44,12 @@
 
     <div class="app-main">
       <header class="app-topbar">
-        <label class="search-field">
+        <form class="search-field" @submit.prevent="submitSearch">
           <svg class="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 21l-4.35-4.35m1.85-5.65a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" />
           </svg>
-          <input type="text" :placeholder="t('common.searchPlaceholder')" />
-        </label>
+          <input v-model="searchQuery" type="text" :placeholder="t('common.searchPlaceholder')" />
+        </form>
 
         <div class="flex items-center gap-3">
           <div class="hidden items-center gap-1 rounded-2xl border border-[var(--app-border)] bg-white/80 p-1 sm:inline-flex">
@@ -65,12 +65,12 @@
             </button>
           </div>
 
-          <button type="button" class="btn-primary hidden sm:inline-flex">
+          <router-link to="/articles/create" class="btn-primary hidden sm:inline-flex">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 5v14m-7-7h14" />
             </svg>
             <span>{{ t('common.newDocument') }}</span>
-          </button>
+          </router-link>
 
           <router-link
             to="/profile"
@@ -111,7 +111,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h } from 'vue';
+import { computed, defineComponent, h, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useUiStore } from '@/stores/ui.store';
 import { useAuthStore } from '@/stores/auth.store';
@@ -148,12 +149,15 @@ const navigation = [
   { labelKey: 'common.settings', to: '/profile', icon: SettingsIcon },
 ];
 
+const route = useRoute();
+const router = useRouter();
 const uiStore = useUiStore();
 const authStore = useAuthStore();
 const { t, locale, locales } = useLocale();
 
 const { sidebarOpen, toasts } = storeToRefs(uiStore);
 const { toggleSidebar, removeToast, setLocale } = uiStore;
+const searchQuery = ref('');
 
 const localeOptions = computed(() =>
   locales.map((item) => ({
@@ -176,6 +180,32 @@ const userRole = computed(() => {
   if (!authStore.user) return t('shell.viewer');
   return authStore.user.role === 'ADMIN' ? t('shell.workspaceAdmin') : t('shell.teamMember');
 });
+
+watch(
+  () => [route.name, route.query.q, route.query.search],
+  () => {
+    if (typeof route.query.q === 'string') {
+      searchQuery.value = route.query.q;
+      return;
+    }
+
+    if (typeof route.query.search === 'string') {
+      searchQuery.value = route.query.search;
+      return;
+    }
+
+    searchQuery.value = '';
+  },
+  { immediate: true },
+);
+
+function submitSearch() {
+  const q = searchQuery.value.trim();
+  router.push({
+    name: 'search',
+    query: q ? { q } : {},
+  });
+}
 
 function handleLocaleChange(nextLocale: Locale) {
   setLocale(nextLocale);

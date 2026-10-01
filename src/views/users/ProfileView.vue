@@ -64,6 +64,35 @@
               </button>
             </div>
           </div>
+
+          <div class="mt-8 border-t border-[var(--app-border)] pt-8">
+            <p class="eyebrow">{{ accessCopy.eyebrow }}</p>
+            <h3 class="section-title mt-2">{{ accessCopy.title }}</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-500">{{ accessCopy.description }}</p>
+
+            <div class="mt-6 grid gap-3">
+              <article v-if="projectsLoading" class="surface-panel p-4 text-sm text-slate-500">
+                {{ accessCopy.loading }}
+              </article>
+              <article v-else-if="projectAccess.length === 0" class="surface-panel p-4 text-sm text-slate-500">
+                {{ accessCopy.empty }}
+              </article>
+              <router-link
+                v-for="item in projectAccess"
+                :key="item.id"
+                :to="`/projects/${item.id}`"
+                class="surface-panel flex items-center justify-between gap-4 p-4"
+              >
+                <div class="min-w-0">
+                  <h4 class="text-sm font-semibold text-slate-900">{{ item.name }}</h4>
+                  <p class="mt-1 text-xs text-slate-500">{{ item.description || accessCopy.fallback }}</p>
+                </div>
+                <span class="status-chip" :class="item.role === 'ADMIN' ? 'status-chip--published' : item.role === 'EDITOR' ? 'status-chip--draft' : 'status-chip--archived'">
+                  {{ item.role }}
+                </span>
+              </router-link>
+            </div>
+          </div>
         </section>
 
         <aside class="space-y-6">
@@ -139,7 +168,9 @@ import MainLayout from '@/components/layout/MainLayout.vue';
 import { useAuthStore } from '@/stores/auth.store';
 import { useUiStore } from '@/stores/ui.store';
 import { useLocale } from '@/composables/useLocale';
+import { projectsApi } from '@/api/projects.api';
 import type { Locale } from '@/locales/messages';
+import type { Project } from '@/types/models';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -148,6 +179,8 @@ const { t, locale, locales, setLocale } = useLocale();
 const { theme } = storeToRefs(uiStore);
 
 const saving = ref(false);
+const projectsLoading = ref(false);
+const projectAccess = ref<Array<Project & { role: 'ADMIN' | 'EDITOR' | 'MEMBER' | 'VIEWER' }>>([]);
 
 const profile = reactive({
   firstName: '',
@@ -170,6 +203,17 @@ const roleLabel = computed(() => {
   return authStore.user.role === 'ADMIN' ? t('shell.workspaceAdmin') : t('shell.teamMember');
 });
 
+const accessCopy = computed(() => {
+  return {
+    eyebrow: 'Project access',
+    title: 'Your spaces and roles',
+    description: 'A quick overview of the projects you can access and the role you have inside each one.',
+    loading: 'Loading project access...',
+    empty: 'You do not have any accessible projects yet.',
+    fallback: 'Team workspace and project context.',
+  };
+});
+
 async function saveProfile() {
   saving.value = true;
   try {
@@ -179,10 +223,26 @@ async function saveProfile() {
       bio: profile.bio,
     });
     uiStore.addToast(t('profile.profileSaved'), 'success');
-  } catch (e) {
+  } catch {
     uiStore.addToast(t('profile.profileFailed'), 'error');
   } finally {
     saving.value = false;
+  }
+}
+
+async function loadProjectAccess() {
+  projectsLoading.value = true;
+  try {
+    const response = await projectsApi.getProjects(1, 50);
+    const currentUserId = authStore.user?.id;
+    projectAccess.value = response.data.map((project) => ({
+      ...project,
+      role: project.creatorId === currentUserId ? 'ADMIN' : project.members?.find((member) => member.userId === currentUserId)?.role || 'VIEWER',
+    }));
+  } catch {
+    projectAccess.value = [];
+  } finally {
+    projectsLoading.value = false;
   }
 }
 
@@ -202,5 +262,7 @@ onMounted(() => {
     profile.lastName = authStore.user.lastName;
     profile.bio = authStore.user.bio || '';
   }
+
+  loadProjectAccess();
 });
 </script>

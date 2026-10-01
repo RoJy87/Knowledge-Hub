@@ -4,6 +4,7 @@ import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { ProjectResponseDto, ProjectMemberDto } from './dto/project-response.dto';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -163,6 +164,36 @@ export class ProjectsController {
     @Body() addMemberDto: AddMemberDto,
   ): Promise<ProjectMemberDto> {
     return this.projectsService.addMember(id, user.id, addMemberDto);
+  }
+
+  @Patch(':id/members/:memberId')
+  @ApiOperation({ summary: 'Update project member role' })
+  @ApiParam({ name: 'id', description: 'Project ID' })
+  @ApiParam({ name: 'memberId', description: 'Member ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Member role updated successfully',
+    type: ProjectMemberDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Member not found',
+  })
+  async updateMemberRole(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @CurrentUser() user: UserResponseDto,
+    @Body() updateMemberRoleDto: UpdateMemberRoleDto,
+  ): Promise<ProjectMemberDto> {
+    return this.projectsService.updateMemberRole(id, user.id, memberId, updateMemberRoleDto);
   }
 
   @Delete(':id/members/:memberId')

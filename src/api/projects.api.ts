@@ -19,6 +19,10 @@ export interface AddMemberDto {
   role: 'MEMBER' | 'EDITOR' | 'ADMIN';
 }
 
+export interface UpdateMemberRoleDto {
+  role: 'MEMBER' | 'EDITOR' | 'ADMIN';
+}
+
 interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -30,7 +34,7 @@ export const projectsApi = {
     const params: Record<string, any> = {};
     if (page !== undefined) params.page = page;
     if (limit !== undefined) params.limit = limit;
-    
+
     const response = await api.get<ApiResponse<PaginatedResponse<Project>>>('/projects', { params });
     return response.data.data;
   },
@@ -61,6 +65,11 @@ export const projectsApi = {
 
   async addMember(projectId: string, data: AddMemberDto): Promise<ProjectMember> {
     const response = await api.post<ApiResponse<ProjectMember>>(`/projects/${projectId}/members`, data);
+    return response.data.data;
+  },
+
+  async updateMemberRole(projectId: string, memberId: string, data: UpdateMemberRoleDto): Promise<ProjectMember> {
+    const response = await api.patch<ApiResponse<ProjectMember>>(`/projects/${projectId}/members/${memberId}`, data);
     return response.data.data;
   },
 

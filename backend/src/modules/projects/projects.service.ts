@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { ProjectResponseDto, ProjectMemberDto } from './dto/project-response.dto';
 
 @Injectable()
@@ -352,6 +353,75 @@ export class ProjectsService {
     return this.mapProjectMember(projectMember);
   }
 
+  async updateMemberRole(
+    projectId: string,
+    userId: string,
+    memberId: string,
+    updateMemberRoleDto: UpdateMemberRoleDto,
+  ): Promise<ProjectMemberDto> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Project with ID ${projectId} not found`);
+    }
+
+    const member = await this.prisma.projectMember.findUnique({
+      where: {
+        userId_projectId: {
+          userId,
+          projectId,
+        },
+      },
+    });
+
+    if (project.creatorId !== userId && member?.role !== 'ADMIN') {
+      throw new ForbiddenException('You do not have permission to update member roles in this project');
+    }
+
+    const targetMember = await this.prisma.projectMember.findUnique({
+      where: { id: memberId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true,
+          },
+        },
+      },
+    });
+
+    if (!targetMember || targetMember.projectId !== projectId) {
+      throw new NotFoundException(`Member with ID ${memberId} not found in this project`);
+    }
+
+    if (targetMember.userId === project.creatorId) {
+      throw new ForbiddenException('You cannot change the project owner role');
+    }
+
+    const updatedMember = await this.prisma.projectMember.update({
+      where: { id: memberId },
+      data: { role: updateMemberRoleDto.role },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true,
+          },
+        },
+      },
+    });
+
+    return this.mapProjectMember(updatedMember);
+  }
+
   async removeMember(projectId: string, userId: string, memberId: string): Promise<void> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -372,6 +442,18 @@ export class ProjectsService {
 
     if (project.creatorId !== userId && member?.role !== 'ADMIN') {
       throw new ForbiddenException('You do not have permission to remove members from this project');
+    }
+
+    const targetMember = await this.prisma.projectMember.findUnique({
+      where: { id: memberId },
+    });
+
+    if (!targetMember || targetMember.projectId !== projectId) {
+      throw new NotFoundException(`Member with ID ${memberId} not found in this project`);
+    }
+
+    if (targetMember.userId === project.creatorId) {
+      throw new ForbiddenException('You cannot remove the project owner');
     }
 
     await this.prisma.projectMember.delete({

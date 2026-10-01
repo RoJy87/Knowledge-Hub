@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
@@ -29,6 +30,7 @@ describe('AuthController (e2e)', () => {
         transform: true,
       }),
     );
+    app.useGlobalInterceptors(new TransformInterceptor());
     await app.init();
 
     prisma = app.get(PrismaService);
