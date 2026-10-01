@@ -1,18 +1,23 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Find user by ID
-   */
   async findById(id: string): Promise<UserResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id },
+      include: {
+        _count: {
+          select: {
+            projectMembers: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -22,12 +27,16 @@ export class UsersService {
     return this.mapUserToResponse(user);
   }
 
-  /**
-   * Find user by email
-   */
   async findByEmail(email: string): Promise<UserResponseDto | null> {
     const user = await this.prisma.user.findUnique({
       where: { email },
+      include: {
+        _count: {
+          select: {
+            projectMembers: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -37,16 +46,10 @@ export class UsersService {
     return this.mapUserToResponse(user);
   }
 
-  /**
-   * Get current user profile
-   */
   async getProfile(userId: string): Promise<UserResponseDto> {
     return this.findById(userId);
   }
 
-  /**
-   * Update user profile
-   */
   async updateProfile(userId: string, updateUserDto: UpdateUserDto): Promise<UserResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -56,7 +59,6 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // Check if email is being updated and if it's already taken
     if (updateUserDto.email && updateUserDto.email !== user.email) {
       const existingUser = await this.prisma.user.findUnique({
         where: { email: updateUserDto.email },
@@ -70,14 +72,53 @@ export class UsersService {
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: updateUserDto,
+      include: {
+        _count: {
+          select: {
+            projectMembers: true,
+          },
+        },
+      },
     });
 
     return this.mapUserToResponse(updatedUser);
   }
 
-  /**
-   * Delete user (soft delete by deactivating)
-   */
+  async updateByAdmin(userId: string, currentUser: UserResponseDto, updateUserAdminDto: UpdateUserAdminDto): Promise<UserResponseDto> {
+    if (currentUser.role !== 'ADMIN') {
+      throw new ForbiddenException('Only admins can manage workspace members');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    if (currentUser.id === userId && updateUserAdminDto.role && updateUserAdminDto.role !== 'ADMIN') {
+      throw new ForbiddenException('You cannot remove your own admin role');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(updateUserAdminDto.role ? { role: updateUserAdminDto.role } : {}),
+        ...(typeof updateUserAdminDto.isActive === 'boolean' ? { isActive: updateUserAdminDto.isActive } : {}),
+      },
+      include: {
+        _count: {
+          select: {
+            projectMembers: true,
+          },
+        },
+      },
+    });
+
+    return this.mapUserToResponse(updatedUser);
+  }
+
   async deleteUser(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -87,17 +128,13 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // Soft delete by deactivating
     await this.prisma.user.update({
       where: { id: userId },
       data: { isActive: false },
     });
   }
 
-  /**
-   * Get all users (admin only)
-   */
-  async findAll(page: number = 1, limit: number = 10): Promise<{
+  async findAll(currentUser: UserResponseDto, page: number = 1, limit: number = 10): Promise<{
     data: UserResponseDto[];
     meta: {
       total: number;
@@ -106,12 +143,23 @@ export class UsersService {
       totalPages: number;
     };
   }> {
+    if (currentUser.role !== 'ADMIN') {
+      throw new ForbiddenException('Only admins can view workspace members');
+    }
+
     const skip = (page - 1) * limit;
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
         skip,
         take: limit,
+        include: {
+          _count: {
+            select: {
+              projectMembers: true,
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.user.count(),
@@ -128,11 +176,11 @@ export class UsersService {
     };
   }
 
-  /**
-   * Map Prisma user to response DTO
-   */
   private mapUserToResponse(user: any): UserResponseDto {
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword as UserResponseDto;
+    const { password, _count, ...userWithoutPassword } = user;
+    return {
+      ...userWithoutPassword,
+      projectsCount: _count?.projectMembers ?? 0,
+    } as UserResponseDto;
   }
 }

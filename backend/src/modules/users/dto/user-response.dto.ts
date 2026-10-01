@@ -26,6 +26,9 @@ export class UserResponseDto {
   @ApiProperty({ description: 'User active status' })
   isActive: boolean;
 
+  @ApiPropertyOptional({ description: 'Number of projects the user participates in' })
+  projectsCount?: number;
+
   @ApiProperty({ description: 'User creation date' })
   createdAt: Date;
 

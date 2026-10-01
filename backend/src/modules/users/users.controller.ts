@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Delete, Body, Param, UseGuards, Query, ParseInt
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -41,10 +42,13 @@ export class UsersController {
     description: 'Unauthorized',
   })
   async findAll(
-    @Query('page', new ParseIntPipe()) page: number = 1,
-    @Query('limit', new ParseIntPipe()) limit: number = 10,
+    @CurrentUser() user: UserResponseDto,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ): Promise<any> {
-    return this.usersService.findAll(page, limit);
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.usersService.findAll(user, pageNum, limitNum);
   }
 
   @Get(':id')
@@ -86,6 +90,21 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto,
   ): Promise<UserResponseDto> {
     return this.usersService.updateProfile(user.id, updateUserDto);
+  }
+
+  @Patch(':id/admin')
+  @ApiOperation({ summary: 'Update user role or status (admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'User updated successfully',
+    type: UserResponseDto,
+  })
+  async updateByAdmin(
+    @Param('id') id: string,
+    @CurrentUser() user: UserResponseDto,
+    @Body() updateUserAdminDto: UpdateUserAdminDto,
+  ): Promise<UserResponseDto> {
+    return this.usersService.updateByAdmin(id, user, updateUserAdminDto);
   }
 
   @Delete('me')
