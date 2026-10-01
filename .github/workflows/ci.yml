@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (vue-tsc + vite)
+        run: pnpm run build
+
+  backend:
+    name: Backend build + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pnpm install --frozen-lockfile
+
+      - name: Allow build scripts (prisma/nest postinstall)
+        working-directory: backend
+        run: |
+          cat > pnpm-workspace.yaml <<EOF
+          allowBuilds:
+            '@nestjs/core': true
+            '@prisma/client': true
+            '@prisma/engines': true
+            prisma: true
+          EOF
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: pnpm exec prisma generate
+
+      - name: Build (nest build)
+        working-directory: backend
+        run: pnpm run build
+
+      - name: Unit tests
+        working-directory: backend
+        run: pnpm exec jest --passWithNoTests
+        env:
+          JWT_SECRET: test-secret-min-32-characters-long-xxxx
+
+      - name: E2E tests (Postgres service)
+        working-directory: backend
+        run: |
+          pnpm exec prisma migrate deploy
+          pnpm run test:e2e --passWithNoTests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowledge_hub_test
+          JWT_SECRET: test-secret-min-32-characters-long-xxxx
+          JWT_REFRESH_SECRET: test-refresh-secret-min-32-characters-xxxx
+          CORS_ORIGIN: http://localhost:5173
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: knowledge_hub_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
